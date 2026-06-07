@@ -1,3 +1,4 @@
+import os
 import streamlit as st
 import pandas as pd
 import plotly.express as px
@@ -115,6 +116,28 @@ st.markdown(f"""
     border-top: 2px solid {C_SECONDARY};
     text-align: center; color: {C_MUTED}; font-size: 0.82rem;
 }}
+
+/* Chat */
+.chat-wrap {{
+    background: {C_SECONDARY}; border-radius: 14px;
+    padding: 1.4rem 1.5rem 1rem; margin-top: 0.5rem;
+}}
+.chat-title {{ font-size: 1.1rem; font-weight: 800; color: {C_TEXT}; margin: 0 0 0.25rem; }}
+.chat-desc  {{ font-size: 0.85rem; color: {C_MUTED}; margin: 0 0 0.9rem; }}
+.chat-ex-label {{
+    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
+    text-transform: uppercase; color: {C_MUTED}; display: block; margin-bottom: 0.4rem;
+}}
+.chat-ex {{
+    display: inline-block; background: white; border: 1.5px solid {C_PRIMARY};
+    color: {C_PRIMARY}; border-radius: 999px; padding: 0.22rem 0.75rem;
+    margin: 0.15rem 0.2rem 0.15rem 0; font-size: 0.78rem; font-weight: 600;
+}}
+.no-key-box {{
+    background: white; border: 1.5px solid {C_PRIMARY};
+    border-radius: 10px; padding: 0.9rem 1.2rem;
+    font-size: 0.88rem; color: {C_TEXT}; margin-top: 0.75rem; line-height: 1.7;
+}}
 </style>
 """, unsafe_allow_html=True)
 
@@ -179,6 +202,38 @@ def buscar_columna(cols: list, target: str, keywords: list):
             if kl in cl or cl in kl:
                 return col, "similar"
     return None, None
+
+
+def construir_contexto(df: pd.DataFrame, col_map: dict) -> str:
+    """Genera un resumen del DataFrame para el contexto del chat IA."""
+    partes = [f"Total de envíos en el archivo: {len(df)}"]
+
+    estado_col = col_map.get("Estado")
+    if estado_col:
+        dist = df[estado_col].value_counts()
+        partes.append("\nDistribución por estado:")
+        for estado, cnt in dist.items():
+            partes.append(f"  - {estado}: {cnt}")
+
+    for target, info in COLUMN_TARGETS.items():
+        col = col_map.get(target)
+        if not col:
+            continue
+        conteos = df.groupby(col, dropna=False).size().sort_values(ascending=False).head(10)
+        partes.append(f"\nEnvíos por {info['label']}:")
+        for nombre, total in conteos.items():
+            es_nulo = pd.isna(nombre) if not isinstance(nombre, str) else False
+            nombre_str = "Sin datos" if es_nulo else str(nombre)
+            linea = f"  - {nombre_str}: {total} envíos"
+            if estado_col:
+                mask = df[col].isna() if es_nulo else df[col] == nombre
+                est = df[mask][estado_col].astype(str).str.lower()
+                pend = int(est.str.contains("pendiente", na=False).sum())
+                entr = int(est.str.contains("entregado", na=False).sum())
+                linea += f" ({pend} pendientes, {entr} entregados)"
+            partes.append(linea)
+
+    return "\n".join(partes)
 
 
 def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5) -> list:
@@ -290,7 +345,7 @@ with col_h:
 with col_btn:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🔄 Nuevo archivo", use_container_width=True):
-        for k in ["df", "filename", "header_row", "col_map", "match_map"]:
+        for k in ["df", "filename", "header_row", "col_map", "match_map", "chat_history"]:
             st.session_state.pop(k, None)
         st.rerun()
 
@@ -520,6 +575,83 @@ st.download_button(
     file_name="logitrack_resumen.xlsx",
     mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
 )
+
+# ─── Chat con IA ──────────────────────────────────────────────────────────────
+st.divider()
+st.markdown("""
+<div class="chat-wrap">
+    <p class="chat-title">💬 Preguntale a tus datos</p>
+    <p class="chat-desc">Hacé preguntas sobre tus envíos y obtendrás respuestas basadas en tu archivo.</p>
+    <span class="chat-ex-label">Ejemplos</span>
+    <span class="chat-ex">¿Cuál es el chofer con más pendientes?</span>
+    <span class="chat-ex">¿Qué zona tiene más problemas?</span>
+    <span class="chat-ex">Dame un resumen del día</span>
+    <span class="chat-ex">¿Cuántos envíos entregó cada empresa?</span>
+</div>
+""", unsafe_allow_html=True)
+
+groq_key = os.environ.get("GROQ_API_KEY")
+
+if not groq_key:
+    st.markdown(f"""
+    <div class="no-key-box">
+        🔑 <strong>Para activar el chat</strong> configurá tu API key de Groq:<br>
+        <code>$env:GROQ_API_KEY = "tu-api-key"</code> &nbsp;(PowerShell, antes de ejecutar la app)<br>
+        <small>Obtené tu key gratis en <strong>console.groq.com</strong></small>
+    </div>
+    """, unsafe_allow_html=True)
+else:
+    if "chat_history" not in st.session_state:
+        st.session_state.chat_history = []
+
+    for msg in st.session_state.chat_history:
+        with st.chat_message(msg["role"]):
+            st.markdown(msg["content"])
+
+    if prompt := st.chat_input("Escribí tu pregunta sobre los envíos..."):
+        st.session_state.chat_history.append({"role": "user", "content": prompt})
+        with st.chat_message("user"):
+            st.markdown(prompt)
+
+        with st.chat_message("assistant"):
+            with st.spinner("Analizando..."):
+                try:
+                    from groq import Groq  # lazy import — no rompe si no está instalado
+                    client = Groq(api_key=groq_key)
+
+                    contexto = construir_contexto(df, col_map)
+                    system_msg = (
+                        "Sos un asistente de análisis logístico. "
+                        "Respondé siempre en español, de forma concisa y directa. "
+                        "Usá los datos reales del Excel para responder con números concretos. "
+                        "Si no podés responder con los datos disponibles, decilo claramente. "
+                        "No respondas preguntas fuera del tema logístico o de los envíos.\n\n"
+                        f"DATOS DEL EXCEL:\n{contexto}"
+                    )
+
+                    messages_groq = [{"role": "system", "content": system_msg}]
+                    for h in st.session_state.chat_history[:-1]:
+                        messages_groq.append({"role": h["role"], "content": h["content"]})
+                    messages_groq.append({"role": "user", "content": prompt})
+
+                    resp = client.chat.completions.create(
+                        model="llama-3.3-70b-versatile",
+                        messages=messages_groq,
+                        max_tokens=600,
+                        temperature=0.4,
+                    )
+                    answer = resp.choices[0].message.content
+                    st.markdown(answer)
+                    st.session_state.chat_history.append({"role": "assistant", "content": answer})
+
+                except ImportError:
+                    msg = "Instalá el paquete de Groq: `pip install groq`"
+                    st.warning(msg)
+                    st.session_state.chat_history.append({"role": "assistant", "content": msg})
+                except Exception as e:
+                    msg = f"Error al conectar con Groq: {e}"
+                    st.error(msg)
+                    st.session_state.chat_history.append({"role": "assistant", "content": msg})
 
 # ─── Footer ───────────────────────────────────────────────────────────────────
 st.markdown(FOOTER, unsafe_allow_html=True)
