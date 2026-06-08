@@ -56,13 +56,15 @@ st.markdown(f"""
     display: flex; align-items: center; gap: 0.75rem;
     background: {C_SECONDARY}; border-radius: 12px;
     padding: 0.75rem 1.2rem; margin-bottom: 1.2rem;
+    flex-wrap: wrap;
 }}
 .dash-brand {{ font-size: 1.2rem; font-weight: 800; color: {C_TEXT}; margin: 0; }}
 .dash-meta  {{ font-size: 0.78rem; color: {C_MUTED}; margin: 0; }}
 .file-badge {{
     margin-left: auto; background: {C_PRIMARY}; color: white;
     border-radius: 999px; padding: 0.2rem 0.9rem;
-    font-size: 0.74rem; font-weight: 700; white-space: nowrap;
+    font-size: 0.74rem; font-weight: 700;
+    max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
 }}
 
 /* KPIs */
@@ -77,10 +79,22 @@ st.markdown(f"""
     text-transform: uppercase; color: {C_MUTED}; margin-top: 0.35rem;
 }}
 
-/* Top 5 */
+/* Top 5 — scroll container (desktop: stretch; mobile: scroll) */
+.top5-scroll {{
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+    -webkit-overflow-scrolling: touch;
+    scrollbar-width: none;
+    align-items: stretch;
+}}
+.top5-scroll::-webkit-scrollbar {{ display: none; }}
 .top5-card {{
+    flex: 1 1 0;
+    min-width: 0;
     background: {C_SECONDARY}; border-radius: 12px; padding: 1rem 0.75rem;
-    text-align: center; border-bottom: 3px solid {C_PRIMARY}; height: 100%;
+    text-align: center; border-bottom: 3px solid {C_PRIMARY};
 }}
 .top5-medal {{ font-size: 1.5rem; line-height: 1; }}
 .top5-name  {{
@@ -137,6 +151,131 @@ st.markdown(f"""
     background: white; border: 1.5px solid {C_PRIMARY};
     border-radius: 10px; padding: 0.9rem 1.2rem;
     font-size: 0.88rem; color: {C_TEXT}; margin-top: 0.75rem; line-height: 1.7;
+}}
+
+/* ─── MOBILE RESPONSIVE ──────────────────────────────────────────────── */
+@media (max-width: 768px) {{
+    /* Padding extra abajo para el teclado del chat */
+    .block-container {{
+        padding: 0.5rem 0.6rem 5.5rem !important;
+        max-width: 100% !important;
+    }}
+
+    /* Bienvenida */
+    .welcome-wrap {{ padding: 1.5rem 0.25rem 1rem; }}
+    .welcome-icon {{ font-size: 3rem; }}
+    .welcome-title {{ font-size: 1.75rem; }}
+    .welcome-sub {{ font-size: 0.9rem; }}
+    .welcome-steps {{ padding: 1rem 1rem; border-radius: 12px; }}
+    .welcome-step {{ font-size: 0.88rem; }}
+
+    /* Header — badge debajo en pantallas chicas */
+    .dash-header {{ padding: 0.6rem 0.85rem; gap: 0.3rem; }}
+    .dash-brand {{ font-size: 1.05rem; }}
+    .dash-meta {{ font-size: 0.7rem; }}
+    .file-badge {{
+        margin-left: 0;
+        max-width: calc(100% - 1rem);
+        font-size: 0.7rem;
+    }}
+
+    /* KPIs */
+    .kpi-card {{ padding: 0.85rem 0.3rem; border-radius: 10px; }}
+    .kpi-num {{ font-size: 1.85rem; }}
+    .kpi-lbl {{ font-size: 0.6rem; }}
+
+    /* Top 5 — cards con ancho fijo para scroll táctil */
+    .top5-scroll {{ scroll-snap-type: x mandatory; }}
+    .top5-card {{
+        flex: 0 0 auto;
+        min-width: 115px;
+        scroll-snap-align: start;
+        padding: 0.75rem 0.5rem;
+    }}
+    .top5-name {{ font-size: 0.72rem; }}
+    .top5-count {{ font-size: 1.35rem; }}
+    .top5-medal {{ font-size: 1.3rem; }}
+
+    /* Section labels */
+    .section-lbl {{ font-size: 0.62rem; margin: 1rem 0 0.35rem; }}
+
+    /* Resumen */
+    .resumen-box {{ padding: 0.8rem 0.9rem; }}
+    .resumen-line {{ font-size: 0.82rem; }}
+
+    /* Radio buttons — que hagan wrap en pantalla chica */
+    div[data-testid="stRadio"] > div {{
+        flex-wrap: wrap !important;
+        gap: 0.35rem !important;
+    }}
+    div[data-testid="stRadio"] label {{
+        min-height: 44px;
+        display: flex;
+        align-items: center;
+    }}
+
+    /* Tap targets grandes (mínimo 48px alto) */
+    .stButton > button {{
+        min-height: 48px !important;
+        font-size: 0.88rem !important;
+        padding: 0.5rem 0.8rem !important;
+        width: 100% !important;
+    }}
+    [data-testid="stDownloadButton"] > button {{
+        min-height: 48px !important;
+        font-size: 0.88rem !important;
+        width: 100% !important;
+    }}
+
+    /* Uploader — área de toque más grande */
+    [data-testid="stFileUploadDropzone"] {{
+        min-height: 100px !important;
+        padding: 1.5rem 1rem !important;
+        cursor: pointer;
+    }}
+
+    /* Tabla con scroll horizontal */
+    [data-testid="stDataFrame"] {{
+        overflow-x: auto !important;
+        -webkit-overflow-scrolling: touch;
+    }}
+    [data-testid="stDataFrame"] > div {{
+        min-width: 0;
+    }}
+
+    /* Plotly: altura reducida en mobile */
+    .js-plotly-plot .plotly {{ max-height: 320px; }}
+
+    /* Chat */
+    .chat-wrap {{ padding: 1rem 0.9rem 0.75rem; }}
+    .chat-title {{ font-size: 0.95rem; }}
+    .chat-desc {{ font-size: 0.78rem; }}
+    .chat-ex {{
+        font-size: 0.73rem;
+        padding: 0.25rem 0.6rem;
+        margin: 0.18rem 0.12rem;
+    }}
+    .no-key-box {{ font-size: 0.8rem; }}
+    .no-key-box code {{ word-break: break-all; font-size: 0.72rem; }}
+
+    /* Input del chat — accesible con teclado mobile */
+    [data-testid="stChatInput"] textarea {{
+        font-size: 1rem !important;
+    }}
+
+    /* Expander */
+    .streamlit-expanderContent {{ padding: 0.5rem !important; }}
+
+    /* Footer */
+    .app-footer {{ font-size: 0.72rem; padding-top: 0.8rem; }}
+}}
+
+@media (max-width: 400px) {{
+    .welcome-title {{ font-size: 1.45rem; }}
+    .kpi-num {{ font-size: 1.55rem; }}
+    .dash-brand {{ font-size: 0.95rem; }}
+    .top5-card {{ min-width: 100px; }}
+    .block-container {{ padding-left: 0.4rem !important; padding-right: 0.4rem !important; }}
 }}
 </style>
 """, unsafe_allow_html=True)
@@ -205,7 +344,6 @@ def buscar_columna(cols: list, target: str, keywords: list):
 
 
 def construir_contexto(df: pd.DataFrame, col_map: dict) -> str:
-    """Genera un resumen del DataFrame para el contexto del chat IA."""
     partes = [f"Total de envíos en el archivo: {len(df)}"]
 
     estado_col = col_map.get("Estado")
@@ -262,7 +400,8 @@ if "df" not in st.session_state:
     welcome_slot = st.empty()
 
     with welcome_slot.container():
-        _, col_c, _ = st.columns([1, 2, 1])
+        # Ratio amplio para que en mobile el contenido use casi todo el ancho
+        _, col_c, _ = st.columns([0.15, 3, 0.15])
         with col_c:
             st.markdown("""
             <div class="welcome-wrap">
@@ -328,10 +467,12 @@ col_map     = st.session_state["col_map"]
 match_map   = st.session_state["match_map"]
 cols_reales = df.columns.tolist()
 
-# ─ Header ────────────────────────────────────────────────────────────────────
+# ─ Header ─────────────────────────────────────────────────────────────────────
 fila_info = f" · encabezado en fila {header_row + 1}" if header_row > 0 else ""
 col_h, col_btn = st.columns([5, 1])
 with col_h:
+    # Nombre de archivo truncado con title para ver completo en tooltip
+    fname_display = filename if len(filename) <= 28 else filename[:25] + "…"
     st.markdown(f"""
     <div class="dash-header">
         <span style="font-size:1.5rem">🚚</span>
@@ -339,12 +480,12 @@ with col_h:
             <p class="dash-brand">LogiTrack</p>
             <p class="dash-meta">{len(df):,} envíos · {len(cols_reales)} columnas{fila_info}</p>
         </div>
-        <span class="file-badge">📂 {filename}</span>
+        <span class="file-badge" title="{filename}">📂 {fname_display}</span>
     </div>
     """, unsafe_allow_html=True)
 with col_btn:
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Nuevo archivo", use_container_width=True):
+    if st.button("🔄 Nuevo", use_container_width=True, help="Cargar otro archivo"):
         for k in ["df", "filename", "header_row", "col_map", "match_map", "chat_history"]:
             st.session_state.pop(k, None)
         st.rerun()
@@ -399,30 +540,27 @@ with k3:
 
 st.divider()
 
-# ─ Selectores ─────────────────────────────────────────────────────────────────
-sel1, sel2 = st.columns([3, 2])
+# ─ Selectores — full width, apilados para que sean usables en mobile ──────────
+st.markdown('<p class="section-lbl">¿Qué querés analizar?</p>', unsafe_allow_html=True)
+radio_opts, radio_map = [], {}
+for target, info in COLUMN_TARGETS.items():
+    col = col_map[target]
+    label = f"{info['emoji']}  {info['label']}" + ("  ⚠️" if col is None else "")
+    radio_opts.append(label)
+    radio_map[label] = (col, info["label"])
 
-with sel1:
-    st.markdown('<p class="section-lbl">¿Qué querés analizar?</p>', unsafe_allow_html=True)
-    radio_opts, radio_map = [], {}
-    for target, info in COLUMN_TARGETS.items():
-        col = col_map[target]
-        label = f"{info['emoji']}  {info['label']}" + ("  ⚠️" if col is None else "")
-        radio_opts.append(label)
-        radio_map[label] = (col, info["label"])
+analisis_label = st.radio(
+    "analisis", options=radio_opts, horizontal=True, label_visibility="collapsed"
+)
+col_agrup, analisis_nombre = radio_map[analisis_label]
 
-    analisis_label = st.radio("analisis", options=radio_opts, horizontal=True,
-                              label_visibility="collapsed")
-    col_agrup, analisis_nombre = radio_map[analisis_label]
-
-with sel2:
-    st.markdown('<p class="section-lbl">Tipo de gráfico</p>', unsafe_allow_html=True)
-    tipo_grafico = st.radio(
-        "grafico",
-        options=["📊 Barras", "🥧 Torta", "📈 Línea", "📉 Barras horiz."],
-        horizontal=True,
-        label_visibility="collapsed",
-    )
+st.markdown('<p class="section-lbl">Tipo de gráfico</p>', unsafe_allow_html=True)
+tipo_grafico = st.radio(
+    "grafico",
+    options=["📊 Barras", "🥧 Torta", "📈 Línea", "📉 Barras horiz."],
+    horizontal=True,
+    label_visibility="collapsed",
+)
 
 if col_agrup is None:
     st.warning(
@@ -443,23 +581,23 @@ df_grouped[col_agrup] = df_grouped[col_agrup].fillna("Sin datos").astype(str)
 
 st.divider()
 
-# ─ Top 5 ──────────────────────────────────────────────────────────────────────
+# ─ Top 5 — HTML puro con scroll táctil en mobile ──────────────────────────────
 st.markdown(f'<p class="section-lbl">🏆 Top 5 — {analisis_nombre}</p>', unsafe_allow_html=True)
 
 top5 = df_grouped.head(5)
 MEDALS = ["🥇", "🥈", "🥉", "4️⃣", "5️⃣"]
 
 if len(top5) > 0:
-    tcols = st.columns(len(top5))
+    cards_html = ""
     for i, (_, row) in enumerate(top5.iterrows()):
-        with tcols[i]:
-            st.markdown(f"""
-            <div class="top5-card">
-                <div class="top5-medal">{MEDALS[i]}</div>
-                <div class="top5-name">{row[col_agrup]}</div>
-                <div class="top5-count">{row['Cantidad']}</div>
-                <div class="top5-lbl">envíos</div>
-            </div>""", unsafe_allow_html=True)
+        cards_html += f"""
+        <div class="top5-card">
+            <div class="top5-medal">{MEDALS[i]}</div>
+            <div class="top5-name">{row[col_agrup]}</div>
+            <div class="top5-count">{row['Cantidad']}</div>
+            <div class="top5-lbl">envíos</div>
+        </div>"""
+    st.markdown(f'<div class="top5-scroll">{cards_html}</div>', unsafe_allow_html=True)
 
 # ─ Resumen en lenguaje natural ────────────────────────────────────────────────
 lineas = generar_resumen(df, col_agrup, estado_col_real, top_n=5)
@@ -476,13 +614,15 @@ if lineas:
 st.markdown(f'<p class="section-lbl">Gráfico — {analisis_nombre}</p>', unsafe_allow_html=True)
 
 tick_angle = -30 if df_grouped[col_agrup].str.len().max() > 10 else 0
+# Altura reducida para que quepa bien en mobile sin ser demasiado chica en desktop
+CHART_HEIGHT = 380
 LAYOUT = dict(
     showlegend=False,
     font_family="Inter, Arial, sans-serif",
     margin=dict(t=20, b=50, l=10, r=10),
     plot_bgcolor="white",
     paper_bgcolor="white",
-    height=430,
+    height=CHART_HEIGHT,
 )
 
 if tipo_grafico == "📊 Barras":
@@ -500,7 +640,7 @@ elif tipo_grafico == "🥧 Torta":
         color_discrete_sequence=CHART_COLORS, hole=0.35,
     )
     fig.update_traces(textposition="outside", textinfo="percent+label")
-    fig.update_layout(**{**LAYOUT, "height": 460})
+    fig.update_layout(**{**LAYOUT, "height": CHART_HEIGHT + 30})
 
 elif tipo_grafico == "📈 Línea":
     df_line = df_grouped.sort_values(col_agrup)
@@ -521,10 +661,11 @@ else:  # 📉 Barras horiz.
         labels={col_agrup: analisis_nombre, "Cantidad": "Envíos"},
     )
     fig.update_traces(textposition="outside", textfont_size=12)
-    fig.update_layout(**{**LAYOUT, "height": max(400, len(df_grouped) * 38)},
+    fig.update_layout(**{**LAYOUT, "height": max(CHART_HEIGHT, len(df_grouped) * 38)},
                       yaxis_tickfont_size=11)
 
-st.plotly_chart(fig, use_container_width=True)
+# responsive=True hace que Plotly reescale el gráfico al ancho del contenedor
+st.plotly_chart(fig, use_container_width=True, config={"responsive": True, "displayModeBar": False})
 
 # ─ Exportar PNG ───────────────────────────────────────────────────────────────
 try:
