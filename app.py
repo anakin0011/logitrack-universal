@@ -179,9 +179,11 @@ def detectar_df(archivo, es_csv=False):
             temp_df = pd.read_excel(archivo, header=None, engine='openpyxl')
             header_encontrado = 0
             for i, row in temp_df.iterrows():
-                if any(kw in str(v) for v in row.values for kw in ["Cadete", "Tracking", "Estado"]):
+                valores = [str(v).strip() for v in row.values]
+                if "Cadete" in valores and "Estado" in valores and "Zona" in valores:
                     header_encontrado = i
                     break
+            st.write(f"🔍 Fila de encabezado detectada: {header_encontrado}")
             archivo.seek(0)
             df = pd.read_excel(archivo, header=header_encontrado, engine='openpyxl')
         except Exception:
