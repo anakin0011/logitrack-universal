@@ -112,32 +112,55 @@ st.markdown(f"""
 
 FOOTER = '<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por Ayelen Anaquin</div>'
 
-# ─── Detección de columnas y lectura robusta ──────────────────────────────────
+# ─── RADAR DE PALABRAS CLAVE AMPLIADO ─────────────────────────────────────────
 COLUMN_TARGETS = {
     "Cadete": {
         "label": "Chofer / Cadete", "emoji": "📦",
-        "keywords": ["chofer", "cadete", "repartidor", "mensajero", "conductor", "delivery"],
+        "keywords": ["chofer", "cadete", "repartidor", "mensajero", "conductor", "delivery", "nombre", "chófer"],
     },
     "Zona": {
         "label": "Zona", "emoji": "🗺️",
-        "keywords": ["zona", "localidad", "area", "área", "sector", "barrio"],
+        "keywords": ["zona", "localidad", "area", "área", "sector", "barrio", "destino"],
     },
     "Nombre Fantasia": {
         "label": "Empresa / Fantasía", "emoji": "🏢",
-        "keywords": ["nombre fantasia", "fantasía", "fantasia", "empresa", "cliente", "comercio"],
+        "keywords": ["nombre fantasia", "fantasía", "fantasia", "empresa", "cliente", "comercio", "remitente"],
     },
     "Estado": {
         "label": "Estado", "emoji": "📋",
-        "keywords": ["estado", "status", "situacion", "situación", "motivo", "condicion"],
+        "keywords": ["estado", "status", "situacion", "situación", "motivo", "condicion", "historial"],
     },
 }
 
-def determinar_df(archivo, es_csv=False):
+def detectar_df(archivo, es_csv=False):
     nombre_archivo = archivo.name.lower()
     df, header_encontrado = None, 0
+    
+    # 1. Intentar como HTML disfrazado (Lighdata crudo)
+    if nombre_archivo.endswith('.xls'):
+        try:
+            archivo.seek(0)
+            tablas = pd.read_html(archivo)
+            if tablas and len(tablas) > 0:
+                df = tablas[0]
+                df.columns = [str(c).strip() for c in df.columns]
+                return df, 0
+        except Exception:
+            pass
 
-    # 1. CSV
-    if nombre_archivo.endswith('.csv'):
+    # 2. Excel Viejo Tradicional
+    if nombre_archivo.endswith('.xls') and df is None:
+        for h in range(6):
+            try:
+                archivo.seek(0)
+                temp_df = pd.read_excel(archivo, header=h, engine='xlrd')
+                if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
+                    df, header_encontrado = temp_df, h
+                    break
+            except Exception: continue
+
+    # 3. CSV
+    elif nombre_archivo.endswith('.csv'):
         for encoding in ['utf-8', 'latin-1', 'cp1252']:
             for h in range(5):
                 try:
@@ -149,9 +172,8 @@ def determinar_df(archivo, es_csv=False):
                 except Exception: continue
             if df is not None: break
 
-    # 2. Excel Moderno (.xlsx)
-    elif nombre_archivo.endswith('.xlsx'):
-        # Intentar openpyxl primero
+    # 4. Excel Moderno de Google Drive (.xlsx)
+    elif df is None or nombre_archivo.endswith('.xlsx'):
         for h in range(6):
             try:
                 archivo.seek(0)
@@ -161,49 +183,7 @@ def determinar_df(archivo, es_csv=False):
                     break
             except Exception: continue
 
-        # Si falla, intentar como xls viejo disfrazado
-        if df is None:
-            try:
-                archivo.seek(0)
-                tablas = pd.read_html(archivo)
-                if tablas:
-                    df = tablas[0]
-                    df.columns = [str(c).strip() for c in df.columns]
-                    return df, 0
-            except Exception:
-                pass
-
-        if df is None:
-            for h in range(6):
-                try:
-                    archivo.seek(0)
-                    temp_df = pd.read_excel(archivo, header=h, engine='xlrd')
-                    if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
-                        df, header_encontrado = temp_df, h
-                        break
-                except Exception: continue
-
-    # 3. Excel Viejo (.xls) — primero como HTML (Lighdata), luego xlrd
-    elif nombre_archivo.endswith('.xls'):
-        try:
-            archivo.seek(0)
-            tablas = pd.read_html(archivo)
-            if tablas:
-                df = tablas[0]
-                df.columns = [str(c).strip() for c in df.columns]
-                return df, 0
-        except Exception:
-            pass
-        for h in range(6):
-            try:
-                archivo.seek(0)
-                temp_df = pd.read_excel(archivo, header=h, engine='xlrd')
-                if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
-                    df, header_encontrado = temp_df, h
-                    break
-            except Exception: continue
-
-    # Salvavidas
+    # Salvavidas final
     if df is None or df.empty:
         try:
             archivo.seek(0)
@@ -214,33 +194,31 @@ def determinar_df(archivo, es_csv=False):
         except Exception:
             return None, 0
 
-    df.columns = [str(c).strip() for c in df.columns]
+    # Limpieza de columnas vacías o raras
+    df.columns = [str(c).strip() for c in df.columns if c is not None]
     return df, header_encontrado
 
 def buscar_columna(cols: list, target: str, keywords: list):
     pairs = [(c, str(c).lower().strip()) for c in cols]
     tl = target.lower().strip()
+    
+    # 1. Búsqueda exacta
     for col, cl in pairs:
-        if cl == tl: return col, "exacta"
-    for col, cl in pairs:
-        if tl in cl or cl in tl: return col, "parcial"
+        if cl == tl: return col
+    # 2. Búsqueda parcial por palabra clave
     for kw in keywords:
         kl = kw.lower()
         for col, cl in pairs:
-            if kl in cl or cl in kl: return col, "similar"
+            if kl in cl: return col
             
-    # Asignación forzada por posición si falla la búsqueda por texto
-    if target == "Cadete" and len(cols) > 0: return cols[0], "forzada"
-    if target == "Zona" and len(cols) > 1: return cols[1], "forzada"
-    if target == "Nombre Fantasia" and len(cols) > 2: return cols[2], "forzada"
-    if target == "Estado" and len(cols) > 3: return cols[3], "forzada"
+    # 3. Asignación inteligente si falla el radar de texto (para evitar el Nro de Tracking)
+    # Buscamos columnas comunes en reportes logísticos por su orden
+    if target == "Cadete" and len(cols) > 1: return cols[1]  # Generalmente el chofer viene después del ID
+    if target == "Zona" and len(cols) > 2: return cols[2]
+    if target == "Nombre Fantasia" and len(cols) > 3: return cols[3]
+    if target == "Estado" and len(cols) > 4: return cols[4]
     
-    if len(cols) > 0: return cols[0], "forzada"
-    return None, None
-
-def construir_contexto(df: pd.DataFrame, col_map: dict) -> str:
-    return f"Total de envíos: {len(df)}"
-
+    return cols[0] if cols else None
 def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5) -> list:
     try:
         counts = df.groupby(col_agrup, dropna=False).size().nlargest(top_n)
@@ -251,7 +229,6 @@ def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5
         return lineas
     except Exception:
         return ["No se pudo procesar el desglose de esta columna."]
-
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
     welcome_slot = st.empty()
@@ -271,17 +248,15 @@ if "df" not in st.session_state:
 
     if archivo is not None:
         es_csv = archivo.name.lower().endswith(".csv")
-        df_cargado, header_row = determinar_df(archivo, es_csv)
+        df_cargado, header_row = detectar_df(archivo, es_csv)
         
         if df_cargado is not None and not df_cargado.empty:
-            col_map, match_map = {}, {}
+            col_map = {}
             for target, info in COLUMN_TARGETS.items():
-                col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
+                col = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
                 col_map[target] = col
-                match_map[target] = mtype
             st.session_state.update({
-                "df": df_cargado, "filename": archivo.name, "header_row": header_row,
-                "col_map": col_map, "match_map": match_map,
+                "df": df_cargado, "filename": archivo.name, "header_row": header_row, "col_map": col_map
             })
             welcome_slot.empty()
             st.rerun()
@@ -293,9 +268,7 @@ if "df" not in st.session_state:
 # ─── DASHBOARD PROFESIONAL ────────────────────────────────────────────────────
 df          = st.session_state["df"]
 filename    = st.session_state["filename"]
-header_row  = st.session_state["header_row"]
 col_map     = st.session_state["col_map"]
-cols_reales = df.columns.tolist()
 
 # Header
 col_h, col_btn = st.columns([5, 1])
@@ -326,7 +299,6 @@ if estado_col_real and estado_col_real in df.columns:
     entregados = int(estados.str.contains("entregado", na=False).sum())
     desvios = int(estados.str.contains("pendiente", na=False).sum() + estados.str.contains("rechazado", na=False).sum())
 
-# Salvavidas para KPIs si la columna de estado no tiene la palabra exacta "entregado"
 if entregados == 0 and total_orders > 0:
     entregados = total_orders
 
@@ -386,18 +358,6 @@ if radio_opts:
         items_html = "".join(f'<div class="resumen-line">· {l}</div>' for l in lineas)
         st.markdown(f'<div class="resumen-box"><div class="resumen-titulo">📝 Resumen Ejecutivo Automatizado</div>{items_html}</div>', unsafe_allow_html=True)
 else:
-    st.warning("No se pudieron mapear las columnas para mostrar los gráficos.")
-
-# ─── SECCIÓN DE SOPORTE E INCIDENCIAS ─────────────────────────────────────────
-st.divider()
-st.markdown(f"""
-<div class="chat-wrap" style="background:{C_SECONDARY}">
-    <p class="chat-title">📱 Registro de Incidencias Operativas (Soporte)</p>
-    <p class="chat-desc">Habilitado para la edición y actualización del equipo de Post-Venta al día siguiente.</p>
-</div>
-""", unsafe_allow_html=True)
-
-with st.expander("🛠️ Mesa de ayuda / Modificar Incidencias"):
-    st.info("Módulo listo para recibir las actualizaciones de los choferes mediante los secretos del servidor.")
+    st.warning("No se pudieron mapear las columnas para mostrar los gráficos de control.")
 
 st.markdown(FOOTER, unsafe_allow_html=True)
