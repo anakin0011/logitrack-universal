@@ -158,7 +158,7 @@ def determinar_df(archivo, es_csv=False):
                 if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
                     df, header_encontrado = temp_df, h
                     break
-            except Exception: continue
+            except Exception as e: st.error(f'Error: {e}'); continue
 
     # 3. Excel Viejo (.xls) — primero como HTML (Lighdata), luego xlrd
     elif nombre_archivo.endswith('.xls'):
