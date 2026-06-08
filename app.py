@@ -205,24 +205,22 @@ def detectar_df(archivo, es_csv=False):
 def buscar_columna(cols: list, target: str, keywords: list):
     pairs = [(c, str(c).lower().strip()) for c in cols]
     tl = target.lower().strip()
-    
-    # 1. Búsqueda exacta
+
+    # 1. Coincidencia exacta
     for col, cl in pairs:
         if cl == tl: return col
-    # 2. Búsqueda parcial por palabra clave
+
+    # 2. Coincidencia parcial (target contenido en columna o viceversa)
+    for col, cl in pairs:
+        if tl in cl or cl in tl: return col
+
+    # 3. Keywords
     for kw in keywords:
         kl = kw.lower()
         for col, cl in pairs:
             if kl in cl: return col
-            
-    # 3. Asignación inteligente si falla el radar de texto (para evitar el Nro de Tracking)
-    # Buscamos columnas comunes en reportes logísticos por su orden
-    if target == "Cadete" and len(cols) > 1: return cols[1]  # Generalmente el chofer viene después del ID
-    if target == "Zona" and len(cols) > 2: return cols[2]
-    if target == "Nombre Fantasia" and len(cols) > 3: return cols[3]
-    if target == "Estado" and len(cols) > 4: return cols[4]
-    
-    return cols[0] if cols else None
+
+    return None
 def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5) -> list:
     try:
         counts = df.groupby(col_agrup, dropna=False).size().nlargest(top_n)
