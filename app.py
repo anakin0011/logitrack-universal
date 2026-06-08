@@ -159,111 +159,92 @@ FOOTER = '<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por A
 COLUMN_TARGETS = {
     "Cadete": {
         "label": "Chofer / Cadete", "emoji": "📦",
-        "keywords": ["cadete", "chofer", "repartidor", "mensajero", "conductor", "delivery", "despachante"],
+        "keywords": ["chofer", "cadete", "repartidor", "mensajero", "conductor", "delivery"],
     },
     "Zona": {
         "label": "Zona", "emoji": "🗺️",
-        "keywords": ["zona", "area", "área", "sector", "region", "región", "barrio"],
+        "keywords": ["zona", "localidad", "area", "área", "sector", "barrio"],
     },
     "Nombre Fantasia": {
-        "label": "Empresa", "emoji": "🏢",
-        "keywords": ["nombre fantasia", "fantasía", "fantasia", "empresa", "cliente", "comercio", "negocio", "razon social", "razón social"],
+        "label": "Empresa / Fantasía", "emoji": "🏢",
+        "keywords": ["nombre fantasia", "fantasía", "fantasia", "empresa", "cliente", "comercio"],
     },
     "Estado": {
         "label": "Estado", "emoji": "📋",
-        "keywords": ["estado", "status", "situacion", "situación", "estatus", "condicion", "condición"],
+        "keywords": ["estado", "status", "situacion", "situación", "motivo", "condicion"],
     },
 }
 
 def detectar_df(archivo, es_csv=False):
     nombre_archivo = archivo.name.lower()
+    df, header_encontrado = None, 0
     
-    # CASO 1: Es un Excel Viejo (.xls)
+    # ─── INTENTO 1: Leer como HTML/XML (El clásico disfraz de Lighdata) ───
     if nombre_archivo.endswith('.xls'):
-        for h in range(8):  # Buscamos hasta en las primeras 8 filas el título
+        try:
+            archivo.seek(0)
+            # Muchas plataformas exportan tablas HTML con extension .xls
+            tablas = pd.read_html(archivo)
+            if tablas and len(tablas) > 0:
+                df = tablas[0]
+                # Si la primera fila quedó como datos pero parecen encabezados, limpiamos
+                df.columns = [str(c).strip() for c in df.columns]
+                return df, 0
+        except Exception:
+            pass
+
+    # ─── INTENTO 2: Lectura tradicional de Excel Viejo ───
+    if nombre_archivo.endswith('.xls') and df is None:
+        for h in range(6):
             try:
                 archivo.seek(0)
-                df = pd.read_excel(archivo, header=h, engine='xlrd')
-                if df is not None and not df.empty and len(df.columns) > 2:
-                    return df, h
-            except Exception:
-                continue
+                temp_df = pd.read_excel(archivo, header=h, engine='xlrd')
+                if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
+                    df, header_encontrado = temp_df, h
+                    break
+            except Exception: continue
 
-    # CASO 2: Es un CSV
+    # ─── INTENTO 3: CSV ───
     elif nombre_archivo.endswith('.csv'):
         for encoding in ['utf-8', 'latin-1', 'cp1252']:
-            for h in range(6):
+            for h in range(5):
                 try:
                     archivo.seek(0)
-                    df = pd.read_csv(archivo, header=h, encoding=encoding)
-                    if df is not None and not df.empty and len(df.columns) > 2:
-                        return df, h
-                except Exception:
-                    continue
+                    temp_df = pd.read_csv(archivo, header=h, encoding=encoding)
+                    if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
+                        df, header_encontrado = temp_df, h
+                        break
+                except Exception: continue
+            if df is not None: break
 
-    # CASO 3: Es un Excel Moderno (.xlsx)
-    else:
-        for h in range(8):
+    # ─── INTENTO 4: Excel Moderno ───
+    elif df is None:
+        for h in range(6):
             try:
                 archivo.seek(0)
-                df = pd.read_excel(archivo, header=h, engine='openpyxl')
-                if df is not None and not df.empty and len(df.columns) > 2:
-                    return df, h
-            except Exception:
-                continue
+                temp_df = pd.read_excel(archivo, header=h, engine='openpyxl')
+                if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
+                    df, header_encontrado = temp_df, h
+                    break
+            except Exception: continue
 
-    # 🚨 EL SALVAVIDAS SUPREMO: Si lo de arriba falló, lee el archivo crudo como venga
-    try:
-        archivo.seek(0)
-        if nombre_archivo.endswith('.xls'):
-            df = pd.read_excel(archivo, engine='xlrd', header=0)
-        elif nombre_archivo.endswith('.csv'):
-            df = pd.read_csv(archivo, encoding='latin-1', header=0)
-        else:
-            df = pd.read_excel(archivo, engine='openpyxl', header=0)
-            
-        # Forzamos que las columnas sean texto para evitar errores
-        df.columns = [str(c).strip() for c in df.columns]
-        return df, 0
-    except Exception:
-        return None, 0
+    # ─── SALVAVIDAS FINAL EXTREMO ───
+    if df is None or df.empty:
+        try:
+            archivo.seek(0)
+            if nombre_archivo.endswith('.xls'): 
+                df = pd.read_excel(archivo, engine='xlrd', header=0)
+            elif nombre_archivo.endswith('.csv'): 
+                df = pd.read_csv(archivo, encoding='latin-1', header=0)
+            else: 
+                df = pd.read_excel(archivo, engine='openpyxl', header=0)
+            header_encontrado = 0
+        except Exception:
+            return None, 0
 
-def buscar_columna(cols: list, target: str, keywords: list):
-    pairs = [(c, str(c).lower().strip()) for c in cols]
-    tl = target.lower().strip()
-    for col, cl in pairs:
-        if cl == tl: return col, "exacta"
-    for col, cl in pairs:
-        if tl in cl or cl in tl: return col, "parcial"
-    for kw in keywords:
-        kl = kw.lower()
-        for col, cl in pairs:
-            if kl in cl or kl in kl: return col, "similar"
-    return None, None
-
-def construir_contexto(df: pd.DataFrame, col_map: dict) -> str:
-    partes = [f"Total de envíos: {len(df)}"]
-    estado_col = col_map.get("Estado")
-    if estado_col:
-        dist = df[estado_col].value_counts()
-        partes.append("\nDistribución por estado:")
-        for estado, cnt in dist.items(): partes.append(f"  - {estado}: {cnt}")
-    return "\n".join(partes)
-
-def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5) -> list:
-    counts = df.groupby(col_agrup, dropna=False).size().nlargest(top_n)
-    lineas = []
-    for nombre, total in counts.items():
-        nombre_str = "Sin datos" if pd.isna(nombre) else str(nombre)
-        if estado_col:
-            subset = df[df[col_agrup].isna()] if pd.isna(nombre) else df[df[col_agrup] == nombre]
-            est = subset[estado_col].astype(str).str.lower()
-            pend = int(est.str.contains("pendiente", na=False).sum() + est.str.contains("rechazado", na=False).sum())
-            entr = int(est.str.contains("entregado", na=False).sum())
-            lineas.append(f"<b>{nombre_str}</b> tiene <b>{total}</b> órdenes · {entr} exitosas · {pend} desvíos")
-        else:
-            lineas.append(f"<b>{nombre_str}</b> tiene <b>{total}</b> órdenes")
-    return lineas
+    # Limpiar nombres de columnas finales
+    df.columns = [str(c).strip() for c in df.columns]
+    return df, header_encontrado
 
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
