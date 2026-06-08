@@ -172,16 +172,19 @@ def detectar_df(archivo, es_csv=False):
                 except Exception: continue
             if df is not None: break
 
-    # 4. Excel Moderno de Google Drive (.xlsx)
-    elif df is None or nombre_archivo.endswith('.xlsx'):
-        for h in range(6):
-            try:
-                archivo.seek(0)
-                temp_df = pd.read_excel(archivo, header=h, engine='openpyxl')
-                if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
-                    df, header_encontrado = temp_df, h
+    # 4. Excel Moderno (.xlsx) — detección inteligente de fila de encabezado
+    elif nombre_archivo.endswith('.xlsx'):
+        try:
+            archivo.seek(0)
+            temp_df = pd.read_excel(archivo, header=None, engine='openpyxl')
+            for i, row in temp_df.iterrows():
+                if any(str(v).strip() in ["Cadete", "Número Tracking", "Estado", "Zona"] for v in row.values):
+                    archivo.seek(0)
+                    df = pd.read_excel(archivo, header=i, engine='openpyxl')
+                    header_encontrado = i
                     break
-            except Exception: continue
+        except Exception:
+            pass
 
     # Salvavidas final
     if df is None or df.empty:
