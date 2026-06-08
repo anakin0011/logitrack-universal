@@ -288,7 +288,7 @@ if estado_col and estado_col in df.columns:
     total_en_viaje   = int(s.str.contains("en viaje",  na=False).sum())
     total_motivo     = int(s.str.contains("motivo",    na=False).sum())
     total_entregados = int(s.str.contains("entregado", na=False).sum())
-    mask_alerta      = s.apply(lambda v: any(k in v for k in ALERTAS_KW))
+    mask_alerta      = s.str.contains("|".join(ALERTAS_KW), na=False)
     df_alertas       = df[mask_alerta].copy()
 
 total_anomalias = total_pendientes + total_rechazados + total_en_viaje + total_motivo
