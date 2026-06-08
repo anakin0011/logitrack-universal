@@ -322,20 +322,25 @@ COLUMN_TARGETS = {
 }
 
 
-def _contar_reales(df: pd.DataFrame) -> int:
-    return sum(
+def _score_header(df: pd.DataFrame) -> float:
+    # columnas_reales × (1 + filas_de_datos):
+    # el header real siempre tiene más filas debajo que cualquier fila de metadatos,
+    # así que este producto separa limpiamente el header correcto del incorrecto.
+    real_cols = sum(
         1 for c in df.columns
         if not str(c).startswith("Unnamed") and not str(c).strip().replace(".", "").isdigit()
     )
+    return float(real_cols * (1 + len(df)))
 
 
 def detectar_df(archivo, es_csv: bool):
-    best_df, best_score, best_h = None, -1, 0
+    best_df, best_score, best_h = None, -1.0, 0
     for h in range(6):
         try:
             archivo.seek(0)
-            candidate = pd.read_csv(archivo, header=h) if es_csv else pd.read_excel(archivo, header=h)
-            score = _contar_reales(candidate)
+            candidate = pd.read_csv(archivo, header=h) if es_csv \
+                        else pd.read_excel(archivo, header=h)
+            score = _score_header(candidate)
             if score > best_score:
                 best_df, best_score, best_h = candidate, score, h
         except Exception:
