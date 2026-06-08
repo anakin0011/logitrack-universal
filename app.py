@@ -265,22 +265,48 @@ if "df" not in st.session_state:
     st.markdown(FOOTER, unsafe_allow_html=True)
     st.stop()
 
-# ─── DASHBOARD PROFESIONAL ────────────────────────────────────────────────────
+# ─── DASHBOARD ────────────────────────────────────────────────────────────────
 df          = st.session_state["df"]
 filename    = st.session_state["filename"]
 col_map     = st.session_state["col_map"]
 
-# Header
+estado_col  = col_map.get("Estado")
+cadete_col  = col_map.get("Cadete")
+zona_col    = col_map.get("Zona")
+empresa_col = col_map.get("Nombre Fantasia")
+
+# ─ Pre-computar máscaras de estado ───────────────────────────────────────────
+ALERTAS_KW   = ["pendiente", "rechazado", "en viaje", "motivo"]
+total_orders = len(df)
+total_pendientes = total_rechazados = total_en_viaje = total_motivo = total_entregados = 0
+df_alertas = pd.DataFrame()
+
+if estado_col and estado_col in df.columns:
+    s = df[estado_col].astype(str).str.lower().str.strip()
+    total_pendientes = int(s.str.contains("pendiente", na=False).sum())
+    total_rechazados = int(s.str.contains("rechazado", na=False).sum())
+    total_en_viaje   = int(s.str.contains("en viaje",  na=False).sum())
+    total_motivo     = int(s.str.contains("motivo",    na=False).sum())
+    total_entregados = int(s.str.contains("entregado", na=False).sum())
+    mask_alerta      = s.apply(lambda v: any(k in v for k in ALERTAS_KW))
+    df_alertas       = df[mask_alerta].copy()
+
+total_anomalias = total_pendientes + total_rechazados + total_en_viaje + total_motivo
+otd_pct = f"{(total_entregados / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
+dev_pct = f"{(total_anomalias  / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
+
+# ─ Header ────────────────────────────────────────────────────────────────────
 col_h, col_btn = st.columns([5, 1])
 with col_h:
+    badge_name = filename if len(filename) <= 22 else filename[:22] + "…"
     st.markdown(f"""
     <div class="dash-header">
         <span style="font-size:1.5rem">📊</span>
         <div>
             <p class="dash-brand">LogiTrack - Panel Corporativo</p>
-            <p class="dash-meta">{len(df):,} transacciones auditadas</p>
+            <p class="dash-meta">{total_orders:,} transacciones auditadas</p>
         </div>
-        <span class="file-badge">📂 {filename[:22]}...</span>
+        <span class="file-badge">📂 {badge_name}</span>
     </div>
     """, unsafe_allow_html=True)
 with col_btn:
@@ -289,29 +315,13 @@ with col_btn:
         st.session_state.clear()
         st.rerun()
 
-# ─ KPIs CORPORATIVOS ─────────────────────────────────────────────────────────
-estado_col_real = col_map.get("Estado")
-total_orders = len(df)
-entregados = desvios = 0
-
-if estado_col_real and estado_col_real in df.columns:
-    estados = df[estado_col_real].astype(str).str.lower().str.strip()
-    entregados = int(estados.str.contains("entregado", na=False).sum())
-    desvios = int(estados.str.contains("pendiente", na=False).sum() + estados.str.contains("rechazado", na=False).sum())
-
-if entregados == 0 and total_orders > 0:
-    entregados = total_orders
-
-ofr_pct = "100%" if total_orders > 0 else "0%"
-otd_pct = f"{(entregados / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
-dev_pct = f"{(desvios / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
-
+# ─ KPIs ──────────────────────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento (KPIs)</p>', unsafe_allow_html=True)
 k1, k2, k3 = st.columns(3)
 with k1:
     st.markdown(f"""
     <div class="kpi-card" style="border-color:{C_PRIMARY}">
-        <div class="kpi-num" style="color:{C_PRIMARY}">{total_orders} <span style="font-size:1.2rem">un.</span></div>
+        <div class="kpi-num" style="color:{C_PRIMARY}">{total_orders:,} <span style="font-size:1.2rem">un.</span></div>
         <div class="kpi-lbl">ORDER FILL RATE (OFR)</div>
     </div>""", unsafe_allow_html=True)
 with k2:
@@ -329,7 +339,30 @@ with k3:
 
 st.divider()
 
-# Selector de Análisis Operativo
+# ─ 1. ALERTAS CRÍTICAS ───────────────────────────────────────────────────────
+st.markdown('<p class="section-lbl">🚨 Alertas Críticas del Corte</p>', unsafe_allow_html=True)
+a1, a2, a3, a4 = st.columns(4)
+for col_a, lbl, val, color in [
+    (a1, "⏳ Pendientes", total_pendientes, "#FF6B6B"),
+    (a2, "❌ Rechazados", total_rechazados, "#C0392B"),
+    (a3, "🚚 En Viaje",   total_en_viaje,   "#F39C12"),
+    (a4, "📌 Con Motivo", total_motivo,     "#E67E22"),
+]:
+    with col_a:
+        st.markdown(f"""
+        <div class="kpi-card" style="border-color:{color}">
+            <div class="kpi-num" style="color:{color}">{val}</div>
+            <div class="kpi-lbl">{lbl}</div>
+        </div>""", unsafe_allow_html=True)
+
+if not (estado_col and estado_col in df.columns):
+    st.info("ℹ️ No se detectó columna de Estado — las alertas críticas no están disponibles.")
+elif total_anomalias == 0:
+    st.success("✅ Sin anomalías detectadas en este corte.")
+
+st.divider()
+
+# ─ 2. DESGLOSE POR DIMENSIÓN ─────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Dimensión de Análisis Logístico</p>', unsafe_allow_html=True)
 radio_opts, radio_map = [], {}
 for target, info in COLUMN_TARGETS.items():
@@ -337,27 +370,103 @@ for target, info in COLUMN_TARGETS.items():
     if col and col in df.columns:
         label = f"{info['emoji']}  {info['label']}"
         radio_opts.append(label)
-        radio_map[label] = (col, info["label"])
+        radio_map[label] = (col, info["label"], target)
 
 if radio_opts:
     analisis_label = st.radio("analisis", options=radio_opts, horizontal=True, label_visibility="collapsed")
-    col_agrup, analisis_nombre = radio_map[analisis_label]
+    col_agrup, analisis_nombre, target_key = radio_map[analisis_label]
 
-    # Datos agrupados para el gráfico
-    df_grouped = df.groupby(col_agrup, dropna=False).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
-    df_grouped[col_agrup] = df_grouped[col_agrup].fillna("Sin Datos").astype(str)
+    if target_key == "Cadete" and estado_col and estado_col in df.columns:
+        # Desglose inteligente cadete × categoría de estado
+        def cat_estado(v):
+            v = str(v).lower().strip()
+            if "entregado" in v: return "Entregados"
+            if "pendiente" in v: return "Pendientes"
+            if "rechazado" in v: return "Rechazados"
+            if "en viaje"  in v: return "En Viaje"
+            if "motivo"    in v: return "Con Motivo"
+            return "Otros"
 
-    # Gráfico
-    fig = px.bar(df_grouped.head(15), x=col_agrup, y="Cantidad", color=col_agrup, color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Cantidad")
-    fig.update_layout(showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10))
-    st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+        df_cat = df[[col_agrup, estado_col]].copy()
+        df_cat["__cat"] = df[estado_col].apply(cat_estado)
+        pivot = df_cat.groupby([col_agrup, "__cat"]).size().unstack(fill_value=0)
+        for c in ["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo", "Otros"]:
+            if c not in pivot.columns:
+                pivot[c] = 0
+        pivot = pivot[["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo", "Otros"]]
+        pivot["Total"] = pivot.sum(axis=1)
+        pivot = pivot.sort_values("Total", ascending=False).reset_index()
+        pivot.columns.name = None
 
-    # Resumen Ejecutivo
-    lineas = generar_resumen(df, col_agrup, estado_col_real)
+        df_melt = pivot.melt(
+            id_vars=[col_agrup],
+            value_vars=["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo"],
+            var_name="Estado", value_name="Cantidad"
+        )
+        fig = px.bar(
+            df_melt, x=col_agrup, y="Cantidad", color="Estado",
+            color_discrete_map={"Entregados": C_GREEN, "Pendientes": "#FF6B6B", "Rechazados": "#C0392B", "En Viaje": "#F39C12", "Con Motivo": "#E67E22"},
+            template="plotly_white", text="Cantidad", barmode="stack"
+        )
+        fig.update_layout(height=380, margin=dict(t=10, b=50, l=10, r=10))
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+        st.markdown('<p class="section-lbl">Tabla de Rendimiento por Chofer</p>', unsafe_allow_html=True)
+        st.dataframe(pivot, use_container_width=True, hide_index=True)
+
+    else:
+        df_grouped = df.groupby(col_agrup, dropna=False).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+        df_grouped[col_agrup] = df_grouped[col_agrup].fillna("Sin Datos").astype(str)
+        fig = px.bar(df_grouped.head(15), x=col_agrup, y="Cantidad", color=col_agrup, color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Cantidad")
+        fig.update_layout(showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10))
+        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+
+    lineas = generar_resumen(df, col_agrup, estado_col)
     if lineas:
         items_html = "".join(f'<div class="resumen-line">· {l}</div>' for l in lineas)
         st.markdown(f'<div class="resumen-box"><div class="resumen-titulo">📝 Resumen Ejecutivo Automatizado</div>{items_html}</div>', unsafe_allow_html=True)
 else:
     st.warning("No se pudieron mapear las columnas para mostrar los gráficos de control.")
+
+st.divider()
+
+# ─ 3. RADAR DE CLIENTES AFECTADOS ────────────────────────────────────────────
+if empresa_col and empresa_col in df.columns and not df_alertas.empty:
+    st.markdown('<p class="section-lbl">🏢 Radar de Clientes Afectados</p>', unsafe_allow_html=True)
+    clientes_aff = (
+        df_alertas.groupby(empresa_col, dropna=False)
+        .size().reset_index(name="Órdenes con Alerta")
+        .sort_values("Órdenes con Alerta", ascending=False)
+    )
+    clientes_aff[empresa_col] = clientes_aff[empresa_col].fillna("Sin Datos").astype(str)
+    fig_cli = px.bar(
+        clientes_aff.head(15), x="Órdenes con Alerta", y=empresa_col,
+        orientation="h", color="Órdenes con Alerta",
+        color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+        template="plotly_white", text="Órdenes con Alerta"
+    )
+    fig_cli.update_layout(
+        showlegend=False, coloraxis_showscale=False,
+        height=max(260, min(len(clientes_aff) * 36, 520)),
+        margin=dict(t=10, b=10, l=10, r=10), yaxis_title=""
+    )
+    st.plotly_chart(fig_cli, use_container_width=True, config={"displayModeBar": False})
+
+# ─ 4. ZONAS CALIENTES ────────────────────────────────────────────────────────
+if zona_col and zona_col in df.columns and not df_alertas.empty:
+    st.markdown('<p class="section-lbl">🔥 Zonas Calientes</p>', unsafe_allow_html=True)
+    zonas_hot = (
+        df_alertas.groupby(zona_col, dropna=False)
+        .size().reset_index(name="Problemas")
+        .sort_values("Problemas", ascending=False)
+    )
+    zonas_hot[zona_col] = zonas_hot[zona_col].fillna("Sin Datos").astype(str)
+    fig_zona = px.bar(
+        zonas_hot.head(15), x=zona_col, y="Problemas",
+        color="Problemas", color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+        template="plotly_white", text="Problemas"
+    )
+    fig_zona.update_layout(showlegend=False, coloraxis_showscale=False, height=320, margin=dict(t=10, b=50, l=10, r=10))
+    st.plotly_chart(fig_zona, use_container_width=True, config={"displayModeBar": False})
 
 st.markdown(FOOTER, unsafe_allow_html=True)
