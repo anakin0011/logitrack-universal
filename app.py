@@ -229,10 +229,44 @@ def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5
         lineas = []
         for nombre, total in counts.items():
             nombre_str = "Sin datos" if pd.isna(nombre) else str(nombre)
-            lineas.append(f"<b>{nombre_str}</b> procesó un volumen de <b>{total}</b> órdenes.")
+            lineas.append(f"<b>{nombre_str}</b> procesó un volumen de <b>{total}</b> unidades.")
         return lineas
     except Exception:
         return ["No se pudo procesar el desglose de esta columna."]
+
+def norm_estados(serie):
+    return (serie.astype(str).str.lower().str.strip()
+        .str.replace("á","a",regex=False).str.replace("é","e",regex=False)
+        .str.replace("í","i",regex=False).str.replace("ó","o",regex=False)
+        .str.replace("ú","u",regex=False))
+
+def tabla_dimension_estados(df, col_agrup, estado_col):
+    s_e = norm_estados(df[estado_col])
+    cat = pd.Series("Otros", index=df.index, dtype=object)
+    cat[s_e.str.contains("rechazado|devuelto|rebote",      na=False)] = "Rechazados"
+    cat[s_e.str.contains("pendiente|en viaje|en camino",   na=False)] = "Pendientes"
+    cat[s_e.str.contains("entregado|entrega",              na=False)] = "Entregados"
+    df_tmp = df[[col_agrup]].copy()
+    df_tmp["__cat"] = cat.values
+    pivot = df_tmp.groupby([col_agrup, "__cat"]).size().unstack(fill_value=0)
+    for c in ["Entregados", "Pendientes", "Rechazados"]:
+        if c not in pivot.columns: pivot[c] = 0
+    pivot["Total"] = pivot.sum(axis=1)
+    pivot = pivot[["Total","Entregados","Pendientes","Rechazados"]].sort_values("Total", ascending=False).reset_index()
+    pivot.columns.name = None
+    pivot.rename(columns={col_agrup: "Nombre"}, inplace=True)
+    return pivot
+
+def guardar_incidencia(datos: dict):
+    # ── Conexión Supabase ──────────────────────────────────────────────────
+    # from supabase import create_client
+    # url      = st.secrets["SUPABASE_URL"]
+    # key      = st.secrets["SUPABASE_KEY"]
+    # supabase = create_client(url, key)
+    # supabase.table("incidencias").insert(datos).execute()
+    # ──────────────────────────────────────────────────────────────────────
+    ruta = "incidencias.csv"
+    pd.DataFrame([datos]).to_csv(ruta, mode="a", header=not os.path.exists(ruta), index=False)
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
     welcome_slot = st.empty()
@@ -247,8 +281,8 @@ if "df" not in st.session_state:
             </div>
             """, unsafe_allow_html=True)
             
-            archivo = st.file_uploader("Subí tu archivo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
-            st.caption("Soporte nativo para formatos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
+            archivo = st.file_uploader("Subí tu corte operativo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
+            st.caption("Soporte nativo para cortes operativos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
     if archivo is not None:
         es_csv = archivo.name.lower().endswith(".csv")
@@ -265,7 +299,7 @@ if "df" not in st.session_state:
             welcome_slot.empty()
             st.rerun()
         else:
-            st.error("❌ No se pudo procesar el archivo. Verificá que tenga datos válidos.")
+            st.error("❌ No se pudo procesar el corte operativo. Verificá que tenga datos válidos.")
     st.markdown(FOOTER, unsafe_allow_html=True)
     st.stop()
 
@@ -280,22 +314,27 @@ zona_col    = col_map.get("Zona")
 empresa_col = col_map.get("Nombre Fantasia")
 
 # ─ Pre-computar máscaras de estado ───────────────────────────────────────────
-ALERTAS_KW   = ["pendiente", "rechazado", "en viaje", "motivo"]
 total_orders = len(df)
 total_pendientes = total_rechazados = total_en_viaje = total_motivo = total_entregados = 0
 df_alertas = pd.DataFrame()
 
 if estado_col and estado_col in df.columns:
-    s = df[estado_col].astype(str).str.lower().str.strip()
-    total_pendientes = int(s.str.contains("pendiente", na=False).sum())
-    total_rechazados = int(s.str.contains("rechazado", na=False).sum())
-    total_en_viaje   = int(s.str.contains("en viaje",  na=False).sum())
-    total_motivo     = int(s.str.contains("motivo",    na=False).sum())
-    total_entregados = int(s.str.contains("entregado", na=False).sum())
-    mask_alerta      = s.str.contains("|".join(ALERTAS_KW), na=False)
+    s = norm_estados(df[estado_col])
+    mask_pend_puro = s.str.contains("pendiente",                    na=False, regex=False)
+    mask_en_viaje  = s.str.contains("en viaje|en camino",           na=False)
+    mask_rech      = s.str.contains("rechazado|devuelto|rebote",    na=False)
+    mask_motivo    = s.str.contains("motivo",                       na=False, regex=False)
+    mask_entr      = s.str.contains("entregado|entrega",            na=False)
+
+    total_pendientes = int(mask_pend_puro.sum())
+    total_en_viaje   = int(mask_en_viaje.sum())
+    total_rechazados = int(mask_rech.sum())
+    total_motivo     = int(mask_motivo.sum())
+    total_entregados = int(mask_entr.sum())
+    mask_alerta      = mask_pend_puro | mask_en_viaje | mask_rech | mask_motivo
     df_alertas       = df[mask_alerta].copy()
 
-total_anomalias = total_pendientes + total_rechazados + total_en_viaje + total_motivo
+total_anomalias = total_pendientes + total_en_viaje + total_rechazados + total_motivo
 otd_pct = f"{(total_entregados / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
 dev_pct = f"{(total_anomalias  / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
 
@@ -308,7 +347,7 @@ with col_h:
         <span style="font-size:1.5rem">📊</span>
         <div>
             <p class="dash-brand">LogiTrack - Panel Corporativo</p>
-            <p class="dash-meta">{total_orders:,} transacciones auditadas</p>
+            <p class="dash-meta">{total_orders:,} unidades auditadas</p>
         </div>
         <span class="file-badge">📂 {badge_name}</span>
     </div>
@@ -380,45 +419,40 @@ if radio_opts:
     analisis_label = st.radio("analisis", options=radio_opts, horizontal=True, label_visibility="collapsed")
     col_agrup, analisis_nombre, target_key = radio_map[analisis_label]
 
-    if target_key == "Cadete" and estado_col and estado_col in df.columns:
-        df_cat = df[[col_agrup, estado_col]].copy()
-        s_e = df[estado_col].astype(str).str.lower().str.strip()
-        cat = pd.Series("Otros", index=df.index, dtype=object)
-        cat[s_e.str.contains("entregado", na=False, regex=False)] = "Entregados"
-        cat[s_e.str.contains("pendiente", na=False, regex=False)] = "Pendientes"
-        cat[s_e.str.contains("rechazado", na=False, regex=False)] = "Rechazados"
-        cat[s_e.str.contains("en viaje",  na=False, regex=False)] = "En Viaje"
-        cat[s_e.str.contains("motivo",    na=False, regex=False)] = "Con Motivo"
-        df_cat["__cat"] = cat
-        pivot = df_cat.groupby([col_agrup, "__cat"]).size().unstack(fill_value=0)
-        for c in ["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo", "Otros"]:
-            if c not in pivot.columns:
-                pivot[c] = 0
-        pivot = pivot[["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo", "Otros"]]
-        pivot["Total"] = pivot.sum(axis=1)
-        pivot = pivot.sort_values("Total", ascending=False).reset_index()
-        pivot.columns.name = None
+    COLOR_ESTADOS = {"Entregados": C_GREEN, "Pendientes": "#FF6B6B", "Rechazados": "#C0392B"}
 
-        df_melt = pivot.melt(
-            id_vars=[col_agrup],
-            value_vars=["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo"],
+    if target_key in ("Cadete", "Nombre Fantasia") and estado_col and estado_col in df.columns:
+        tabla = tabla_dimension_estados(df, col_agrup, estado_col)
+        df_melt = tabla.melt(
+            id_vars=["Nombre"], value_vars=["Entregados", "Pendientes", "Rechazados"],
             var_name="Estado", value_name="Cantidad"
         )
-        fig = px.bar(
-            df_melt, x=col_agrup, y="Cantidad", color="Estado",
-            color_discrete_map={"Entregados": C_GREEN, "Pendientes": "#FF6B6B", "Rechazados": "#C0392B", "En Viaje": "#F39C12", "Con Motivo": "#E67E22"},
-            template="plotly_white", text="Cantidad", barmode="stack"
-        )
-        fig.update_layout(height=380, margin=dict(t=10, b=50, l=10, r=10))
+        if target_key == "Cadete":
+            fig = px.bar(
+                df_melt, x="Nombre", y="Cantidad", color="Estado",
+                color_discrete_map=COLOR_ESTADOS,
+                template="plotly_white", text="Cantidad", barmode="stack"
+            )
+            fig.update_layout(height=380, margin=dict(t=10, b=50, l=10, r=10))
+        else:
+            fig = px.bar(
+                df_melt.head(45), x="Cantidad", y="Nombre", color="Estado",
+                color_discrete_map=COLOR_ESTADOS,
+                template="plotly_white", text="Cantidad", barmode="stack", orientation="h"
+            )
+            fig.update_layout(
+                height=max(300, min(len(tabla) * 38, 560)),
+                margin=dict(t=10, b=10, l=10, r=10), yaxis_title=""
+            )
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-
-        st.markdown('<p class="section-lbl">Tabla de Rendimiento por Chofer</p>', unsafe_allow_html=True)
-        st.dataframe(pivot, use_container_width=True, hide_index=True)
+        lbl_tabla = "Rendimiento por Chofer" if target_key == "Cadete" else "Unidades por Empresa"
+        st.markdown(f'<p class="section-lbl">{lbl_tabla}</p>', unsafe_allow_html=True)
+        st.dataframe(tabla, use_container_width=True, hide_index=True)
 
     else:
-        df_grouped = df.groupby(col_agrup, dropna=False).size().reset_index(name="Cantidad").sort_values("Cantidad", ascending=False)
+        df_grouped = df.groupby(col_agrup, dropna=False).size().reset_index(name="Unidades").sort_values("Unidades", ascending=False)
         df_grouped[col_agrup] = df_grouped[col_agrup].fillna("Sin Datos").astype(str)
-        fig = px.bar(df_grouped.head(15), x=col_agrup, y="Cantidad", color=col_agrup, color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Cantidad")
+        fig = px.bar(df_grouped.head(15), x=col_agrup, y="Unidades", color=col_agrup, color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Unidades")
         fig.update_layout(showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
