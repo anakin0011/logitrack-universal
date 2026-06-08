@@ -1,8 +1,10 @@
 import os
+import re
+import io
 import streamlit as st
+import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
-import io
 
 st.set_page_config(
     page_title="LogiTrack",
@@ -151,6 +153,22 @@ st.markdown(f"""
     background: white; border: 1.5px solid {C_PRIMARY};
     border-radius: 10px; padding: 0.9rem 1.2rem;
     font-size: 0.88rem; color: {C_TEXT}; margin-top: 0.75rem; line-height: 1.7;
+}}
+
+/* Hint mobile en el uploader */
+.upload-hint {{
+    display: flex; align-items: flex-start; gap: 0.65rem;
+    background: #EEF6FF; border: 1.5px solid #90CAF9;
+    border-radius: 10px; padding: 0.75rem 0.95rem;
+    font-size: 0.84rem; color: {C_TEXT}; margin-bottom: 0.85rem; line-height: 1.55;
+}}
+.upload-hint-icon {{ font-size: 1.2rem; flex-shrink: 0; margin-top: 0.05rem; }}
+
+/* Hint Google Sheets */
+.sheets-hint {{
+    background: #F0FFF4; border: 1.5px solid #A5D6A7;
+    border-radius: 10px; padding: 0.75rem 0.95rem;
+    font-size: 0.83rem; color: {C_TEXT}; margin-bottom: 0.85rem; line-height: 1.6;
 }}
 
 /* ─── MOBILE RESPONSIVE ──────────────────────────────────────────────── */
@@ -395,6 +413,43 @@ def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5
     return lineas
 
 
+# ─── Google Sheets helpers ───────────────────────────────────────────────────
+def _extraer_sheet_id(url: str):
+    m = re.search(r"/spreadsheets/d/([a-zA-Z0-9-_]+)", url)
+    return m.group(1) if m else None
+
+def _extraer_gid(url: str):
+    m = re.search(r"[#&]gid=(\d+)", url)
+    return m.group(1) if m else "0"
+
+def cargar_google_sheets(url: str):
+    """Descarga una Google Sheet pública como CSV. Devuelve (df, header_row, error)."""
+    sheet_id = _extraer_sheet_id(url)
+    if not sheet_id:
+        return None, 0, "URL no válida. Copiá el link desde el botón **Compartir** de Google Sheets."
+    gid = _extraer_gid(url)
+    export_url = (
+        f"https://docs.google.com/spreadsheets/d/{sheet_id}"
+        f"/export?format=csv&gid={gid}"
+    )
+    try:
+        import requests
+        r = requests.get(export_url, timeout=15)
+        if r.status_code == 403:
+            return None, 0, (
+                "La hoja no es pública. En Google Sheets → **Compartir** → "
+                "cambiá el acceso a *Cualquier persona con el enlace puede ver*."
+            )
+        r.raise_for_status()
+        buf = io.BytesIO(r.content)
+        df, header_row = detectar_df(buf, es_csv=True)
+        if df is None or df.empty:
+            return None, 0, "La hoja está vacía o no tiene datos reconocibles."
+        return df, header_row, None
+    except Exception as e:
+        return None, 0, f"No se pudo cargar la hoja: {e}"
+
+
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
     welcome_slot = st.empty()
@@ -425,35 +480,104 @@ if "df" not in st.session_state:
             </div>
             """, unsafe_allow_html=True)
 
-            archivo = st.file_uploader(
-                "Subí tu archivo de envíos",
-                type=["xlsx", "csv"],
-                label_visibility="collapsed",
-            )
-            st.caption("Formatos aceptados: Excel (.xlsx) · CSV (.csv)")
+            tab_file, tab_sheets = st.tabs(["📁 Subir archivo", "🔗 Google Sheets"])
 
+            with tab_file:
+                st.markdown("""
+                <div class="upload-hint">
+                    <span class="upload-hint-icon">📱</span>
+                    <div>
+                        <strong>En celular:</strong> tocá el botón de abajo,
+                        elegí <em>"Archivos"</em> o <em>"Explorador de archivos"</em>
+                        y buscá tu Excel descargado.
+                    </div>
+                </div>
+                """, unsafe_allow_html=True)
+                archivo = st.file_uploader(
+                    "Subí tu archivo de envíos",
+                    type=["xlsx", "xls", "csv"],
+                    label_visibility="collapsed",
+                )
+                st.caption("Formatos aceptados: Excel (.xlsx / .xls) · CSV (.csv)")
+                # Inyecta MIME types al input nativo para que Android/iOS
+                # muestren los archivos Excel en el selector del sistema.
+                # Streamlit sólo pone extensiones en accept; los MIME types
+                # son necesarios para algunos file pickers mobile.
+                components.html("""
+                <script>
+                (function patchAccept() {
+                    var ACCEPT = [
+                        ".xlsx", ".xls", ".csv",
+                        "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+                        "application/vnd.ms-excel",
+                        "text/csv", "text/plain"
+                    ].join(",");
+                    function patch() {
+                        var doc = (window.parent || window).document;
+                        doc.querySelectorAll('input[type="file"]').forEach(function(el) {
+                            if (el.accept !== ACCEPT) el.accept = ACCEPT;
+                        });
+                    }
+                    patch();
+                    new MutationObserver(patch).observe(
+                        (window.parent || window).document.body,
+                        { childList: true, subtree: true }
+                    );
+                })();
+                </script>
+                """, height=0)
+
+            with tab_sheets:
+                st.markdown("""
+                <div class="sheets-hint">
+                    📋 <strong>Cómo obtener el link:</strong><br>
+                    Abrí tu hoja → <em>Compartir</em> →
+                    <em>Cualquier persona con el enlace puede ver</em> →
+                    copiá el link y pegalo acá abajo.
+                </div>
+                """, unsafe_allow_html=True)
+                sheets_url = st.text_input(
+                    "Link de Google Sheets",
+                    placeholder="https://docs.google.com/spreadsheets/d/...",
+                    label_visibility="collapsed",
+                )
+                cargar_btn = st.button("📥 Cargar desde Google Sheets", use_container_width=True)
+
+    # ─ Procesar archivo subido ────────────────────────────────────────────────
     if archivo is not None:
         es_csv = archivo.name.lower().endswith(".csv")
         df_cargado, header_row = detectar_df(archivo, es_csv)
+        nombre_archivo = archivo.name
+        error_msg = None if (df_cargado is not None and not df_cargado.empty) \
+                    else "El archivo está vacío o no se pudo leer."
 
-        if df_cargado is None or df_cargado.empty:
-            st.error("El archivo está vacío o no se pudo leer.")
-        else:
-            col_map, match_map = {}, {}
-            for target, info in COLUMN_TARGETS.items():
-                col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
-                col_map[target]   = col
-                match_map[target] = mtype
+    # ─ Procesar Google Sheets ─────────────────────────────────────────────────
+    elif sheets_url and cargar_btn:
+        with st.spinner("Conectando con Google Sheets..."):
+            df_cargado, header_row, error_msg = cargar_google_sheets(sheets_url)
+        nombre_archivo = "Google Sheets"
 
-            st.session_state.update({
-                "df":         df_cargado,
-                "filename":   archivo.name,
-                "header_row": header_row,
-                "col_map":    col_map,
-                "match_map":  match_map,
-            })
-            welcome_slot.empty()
-            st.rerun()
+    else:
+        df_cargado, header_row, nombre_archivo, error_msg = None, 0, None, None
+
+    if error_msg:
+        st.error(error_msg)
+    elif df_cargado is not None:
+        col_map, match_map = {}, {}
+        for target, info in COLUMN_TARGETS.items():
+            col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
+            col_map[target]   = col
+            match_map[target] = mtype
+
+        st.session_state.update({
+            "df":         df_cargado,
+            "filename":   nombre_archivo,
+            "header_row": header_row,
+            "col_map":    col_map,
+            "match_map":  match_map,
+        })
+        welcome_slot.empty()
+        st.rerun()
 
     st.markdown(FOOTER, unsafe_allow_html=True)
     st.stop()
