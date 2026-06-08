@@ -377,18 +377,15 @@ if radio_opts:
     col_agrup, analisis_nombre, target_key = radio_map[analisis_label]
 
     if target_key == "Cadete" and estado_col and estado_col in df.columns:
-        # Desglose inteligente cadete × categoría de estado
-        def cat_estado(v):
-            v = str(v).lower().strip()
-            if "entregado" in v: return "Entregados"
-            if "pendiente" in v: return "Pendientes"
-            if "rechazado" in v: return "Rechazados"
-            if "en viaje"  in v: return "En Viaje"
-            if "motivo"    in v: return "Con Motivo"
-            return "Otros"
-
         df_cat = df[[col_agrup, estado_col]].copy()
-        df_cat["__cat"] = df[estado_col].apply(cat_estado)
+        s_e = df[estado_col].astype(str).str.lower().str.strip()
+        cat = pd.Series("Otros", index=df.index, dtype=object)
+        cat[s_e.str.contains("entregado", na=False, regex=False)] = "Entregados"
+        cat[s_e.str.contains("pendiente", na=False, regex=False)] = "Pendientes"
+        cat[s_e.str.contains("rechazado", na=False, regex=False)] = "Rechazados"
+        cat[s_e.str.contains("en viaje",  na=False, regex=False)] = "En Viaje"
+        cat[s_e.str.contains("motivo",    na=False, regex=False)] = "Con Motivo"
+        df_cat["__cat"] = cat
         pivot = df_cat.groupby([col_agrup, "__cat"]).size().unstack(fill_value=0)
         for c in ["Entregados", "Pendientes", "Rechazados", "En Viaje", "Con Motivo", "Otros"]:
             if c not in pivot.columns:
@@ -431,42 +428,48 @@ else:
 st.divider()
 
 # ─ 3. RADAR DE CLIENTES AFECTADOS ────────────────────────────────────────────
-if empresa_col and empresa_col in df.columns and not df_alertas.empty:
+if empresa_col and empresa_col in df.columns:
     st.markdown('<p class="section-lbl">🏢 Radar de Clientes Afectados</p>', unsafe_allow_html=True)
-    clientes_aff = (
-        df_alertas.groupby(empresa_col, dropna=False)
-        .size().reset_index(name="Órdenes con Alerta")
-        .sort_values("Órdenes con Alerta", ascending=False)
-    )
-    clientes_aff[empresa_col] = clientes_aff[empresa_col].fillna("Sin Datos").astype(str)
-    fig_cli = px.bar(
-        clientes_aff.head(15), x="Órdenes con Alerta", y=empresa_col,
-        orientation="h", color="Órdenes con Alerta",
-        color_continuous_scale=["#FFF3C4", "#FF6B6B"],
-        template="plotly_white", text="Órdenes con Alerta"
-    )
-    fig_cli.update_layout(
-        showlegend=False, coloraxis_showscale=False,
-        height=max(260, min(len(clientes_aff) * 36, 520)),
-        margin=dict(t=10, b=10, l=10, r=10), yaxis_title=""
-    )
-    st.plotly_chart(fig_cli, use_container_width=True, config={"displayModeBar": False})
+    if df_alertas.empty:
+        st.info("✅ Sin clientes con alertas activas en este corte.")
+    else:
+        clientes_aff = (
+            df_alertas.groupby(empresa_col, dropna=False)
+            .size().reset_index(name="Órdenes con Alerta")
+            .sort_values("Órdenes con Alerta", ascending=False)
+        )
+        clientes_aff[empresa_col] = clientes_aff[empresa_col].fillna("Sin Datos").astype(str)
+        fig_cli = px.bar(
+            clientes_aff.head(15), x="Órdenes con Alerta", y=empresa_col,
+            orientation="h", color="Órdenes con Alerta",
+            color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+            template="plotly_white", text="Órdenes con Alerta"
+        )
+        fig_cli.update_layout(
+            showlegend=False, coloraxis_showscale=False,
+            height=max(260, min(len(clientes_aff) * 36, 520)),
+            margin=dict(t=10, b=10, l=10, r=10), yaxis_title=""
+        )
+        st.plotly_chart(fig_cli, use_container_width=True, config={"displayModeBar": False})
 
 # ─ 4. ZONAS CALIENTES ────────────────────────────────────────────────────────
-if zona_col and zona_col in df.columns and not df_alertas.empty:
+if zona_col and zona_col in df.columns:
     st.markdown('<p class="section-lbl">🔥 Zonas Calientes</p>', unsafe_allow_html=True)
-    zonas_hot = (
-        df_alertas.groupby(zona_col, dropna=False)
-        .size().reset_index(name="Problemas")
-        .sort_values("Problemas", ascending=False)
-    )
-    zonas_hot[zona_col] = zonas_hot[zona_col].fillna("Sin Datos").astype(str)
-    fig_zona = px.bar(
-        zonas_hot.head(15), x=zona_col, y="Problemas",
-        color="Problemas", color_continuous_scale=["#FFF3C4", "#FF6B6B"],
-        template="plotly_white", text="Problemas"
-    )
-    fig_zona.update_layout(showlegend=False, coloraxis_showscale=False, height=320, margin=dict(t=10, b=50, l=10, r=10))
-    st.plotly_chart(fig_zona, use_container_width=True, config={"displayModeBar": False})
+    if df_alertas.empty:
+        st.info("✅ Sin zonas con alertas activas en este corte.")
+    else:
+        zonas_hot = (
+            df_alertas.groupby(zona_col, dropna=False)
+            .size().reset_index(name="Problemas")
+            .sort_values("Problemas", ascending=False)
+        )
+        zonas_hot[zona_col] = zonas_hot[zona_col].fillna("Sin Datos").astype(str)
+        fig_zona = px.bar(
+            zonas_hot.head(15), x=zona_col, y="Problemas",
+            color="Problemas", color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+            template="plotly_white", text="Problemas"
+        )
+        fig_zona.update_layout(showlegend=False, coloraxis_showscale=False, height=320, margin=dict(t=10, b=50, l=10, r=10))
+        st.plotly_chart(fig_zona, use_container_width=True, config={"displayModeBar": False})
 
 st.markdown(FOOTER, unsafe_allow_html=True)
