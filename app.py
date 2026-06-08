@@ -151,6 +151,7 @@ def determinar_df(archivo, es_csv=False):
 
     # 2. Excel Moderno (.xlsx)
     elif nombre_archivo.endswith('.xlsx'):
+        # Intentar openpyxl primero
         for h in range(6):
             try:
                 archivo.seek(0)
@@ -158,7 +159,29 @@ def determinar_df(archivo, es_csv=False):
                 if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
                     df, header_encontrado = temp_df, h
                     break
-            except Exception as e: st.error(f'Error: {e}'); continue
+            except Exception: continue
+
+        # Si falla, intentar como xls viejo disfrazado
+        if df is None:
+            try:
+                archivo.seek(0)
+                tablas = pd.read_html(archivo)
+                if tablas:
+                    df = tablas[0]
+                    df.columns = [str(c).strip() for c in df.columns]
+                    return df, 0
+            except Exception:
+                pass
+
+        if df is None:
+            for h in range(6):
+                try:
+                    archivo.seek(0)
+                    temp_df = pd.read_excel(archivo, header=h, engine='xlrd')
+                    if temp_df is not None and not temp_df.empty and len(temp_df.columns) > 1:
+                        df, header_encontrado = temp_df, h
+                        break
+                except Exception: continue
 
     # 3. Excel Viejo (.xls) — primero como HTML (Lighdata), luego xlrd
     elif nombre_archivo.endswith('.xls'):
