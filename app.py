@@ -155,7 +155,7 @@ st.markdown(f"""
 
 FOOTER = '<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por Ayelen Anaquin</div>'
 
-# ─── Detección de columnas ────────────────────────────────────────────────────
+# ─── Detección de columnas y lectura robusta ──────────────────────────────────
 COLUMN_TARGETS = {
     "Cadete": {
         "label": "Chofer / Cadete", "emoji": "📦",
@@ -175,53 +175,49 @@ COLUMN_TARGETS = {
     },
 }
 
-_EXCEL_ENGINES = [
-    ("openpyxl", "xlsx (Excel moderno)"),
-    ("xlrd",     "xls (Excel clásico de Lighdata)"),
-    ("odf",      "ods (LibreOffice)"),
-]
-_CSV_ENCODINGS = [
-    ("utf-8",   "CSV · UTF-8"),
-    ("latin-1", "CSV · Latin-1"),
-    ("cp1252",  "CSV · Windows-1252"),
-]
-
-def _score_header(df: pd.DataFrame) -> float:
-    real_cols = sum(1 for c in df.columns if not str(c).startswith("Unnamed") and not str(c).strip().replace(".", "").isdigit())
-    return float(real_cols * (1 + len(df)))
-
-def _probar_engine(archivo, engine: str, nombre: str):
-    best = (None, 0, -1.0)
-    for h in range(6):
-        try:
-            archivo.seek(0)
-            df = pd.read_excel(archivo, header=h, engine=engine)
-            s = _score_header(df)
-            if s > best[2]: best = (df, h, s)
-        except Exception: pass
-    return (*best, nombre)
-
-def _probar_csv(archivo, encoding: str, nombre: str):
-    best = (None, 0, -1.0)
-    for h in range(6):
-        try:
-            archivo.seek(0)
-            df = pd.read_csv(archivo, header=h, encoding=encoding)
-            s = _score_header(df)
-            if s > best[2]: best = (df, h, s)
-        except Exception: pass
-    return (*best, nombre)
-
 def detectar_df(archivo, es_csv: bool):
-    candidatos = []
-    for engine, nombre in _EXCEL_ENGINES:
-        candidatos.append(_probar_engine(archivo, engine, nombre))
-    for encoding, nombre in _CSV_ENCODINGS:
-        candidatos.append(_probar_csv(archivo, encoding, nombre))
-    mejor = max(candidatos, key=lambda c: c[2])
-    df, h, score, fmt = mejor
-    archivo.seek(0)
-    return df, h, (fmt if score > 0 else None)
+    nombre_archivo = archivo.name.lower()
+    
+    # CASO 1: Es un CSV
+    if es_csv or nombre_archivo.endswith('.csv'):
+        for encoding in ['utf-8', 'latin-1', 'cp1252']:
+            for h in range(5):
+                try:
+                    archivo.seek(0)
+                    df = pd.read_csv(archivo, header=h, encoding=encoding)
+                    if not df.empty and len(df.columns) > 1:
+                        return df, h
+                except Exception:
+                    continue
+                    
+    # CASO 2: Es un Excel Viejo de Lighdata (.xls)
+    elif nombre_archivo.endswith('.xls'):
+        for h in range(5):
+            try:
+                archivo.seek(0)
+                df = pd.read_excel(archivo, header=h, engine='xlrd')
+                if not df.empty and len(df.columns) > 1:
+                    return df, h
+            except Exception:
+                continue
+
+    # CASO 3: Es un Excel Moderno (.xlsx)
+    else:
+        for h in range(5):
+            try:
+                archivo.seek(0)
+                df = pd.read_excel(archivo, header=h, engine='openpyxl')
+                if not df.empty and len(df.columns) > 1:
+                    return df, h
+            except Exception:
+                continue
+
+    try:
+        archivo.seek(0)
+        df = pd.read_excel(archivo)
+        return df, 0
+    except Exception:
+        return None, 0
 
 def buscar_columna(cols: list, target: str, keywords: list):
     pairs = [(c, str(c).lower().strip()) for c in cols]
@@ -233,7 +229,7 @@ def buscar_columna(cols: list, target: str, keywords: list):
     for kw in keywords:
         kl = kw.lower()
         for col, cl in pairs:
-            if kl in cl or cl in kl: return col, "similar"
+            if kl in cl or kl in kl: return col, "similar"
     return None, None
 
 def construir_contexto(df: pd.DataFrame, col_map: dict) -> str:
@@ -253,7 +249,7 @@ def generar_resumen(df: pd.DataFrame, col_agrup: str, estado_col, top_n: int = 5
         if estado_col:
             subset = df[df[col_agrup].isna()] if pd.isna(nombre) else df[df[col_agrup] == nombre]
             est = subset[estado_col].astype(str).str.lower()
-            pend = int(est.str.contains("pendiente", na=False).sum())
+            pend = int(est.str.contains("pendiente", na=False).sum() + est.str.contains("rechazado", na=False).sum())
             entr = int(est.str.contains("entregado", na=False).sum())
             lineas.append(f"<b>{nombre_str}</b> tiene <b>{total}</b> órdenes · {entr} exitosas · {pend} desvíos")
         else:
