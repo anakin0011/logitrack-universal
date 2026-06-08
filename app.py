@@ -177,12 +177,13 @@ def detectar_df(archivo, es_csv=False):
         try:
             archivo.seek(0)
             temp_df = pd.read_excel(archivo, header=None, engine='openpyxl')
+            header_encontrado = 0
             for i, row in temp_df.iterrows():
-                if any(str(v).strip() in ["Cadete", "Número Tracking", "Estado", "Zona"] for v in row.values):
-                    archivo.seek(0)
-                    df = pd.read_excel(archivo, header=i, engine='openpyxl')
+                if any(kw in str(v) for v in row.values for kw in ["Cadete", "Tracking", "Estado"]):
                     header_encontrado = i
                     break
+            archivo.seek(0)
+            df = pd.read_excel(archivo, header=header_encontrado, engine='openpyxl')
         except Exception:
             pass
 
