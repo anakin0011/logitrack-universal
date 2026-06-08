@@ -175,46 +175,55 @@ COLUMN_TARGETS = {
     },
 }
 
-def detectar_df(archivo, es_csv: bool):
+def detectar_df(archivo, es_csv=False):
     nombre_archivo = archivo.name.lower()
     
-    # CASO 1: Es un CSV
-    if es_csv or nombre_archivo.endswith('.csv'):
-        for encoding in ['utf-8', 'latin-1', 'cp1252']:
-            for h in range(5):
-                try:
-                    archivo.seek(0)
-                    df = pd.read_csv(archivo, header=h, encoding=encoding)
-                    if not df.empty and len(df.columns) > 1:
-                        return df, h
-                except Exception:
-                    continue
-                    
-    # CASO 2: Es un Excel Viejo de Lighdata (.xls)
-    elif nombre_archivo.endswith('.xls'):
-        for h in range(5):
+    # CASO 1: Es un Excel Viejo (.xls)
+    if nombre_archivo.endswith('.xls'):
+        for h in range(8):  # Buscamos hasta en las primeras 8 filas el título
             try:
                 archivo.seek(0)
                 df = pd.read_excel(archivo, header=h, engine='xlrd')
-                if not df.empty and len(df.columns) > 1:
+                if df is not None and not df.empty and len(df.columns) > 2:
                     return df, h
             except Exception:
                 continue
+
+    # CASO 2: Es un CSV
+    elif nombre_archivo.endswith('.csv'):
+        for encoding in ['utf-8', 'latin-1', 'cp1252']:
+            for h in range(6):
+                try:
+                    archivo.seek(0)
+                    df = pd.read_csv(archivo, header=h, encoding=encoding)
+                    if df is not None and not df.empty and len(df.columns) > 2:
+                        return df, h
+                except Exception:
+                    continue
 
     # CASO 3: Es un Excel Moderno (.xlsx)
     else:
-        for h in range(5):
+        for h in range(8):
             try:
                 archivo.seek(0)
                 df = pd.read_excel(archivo, header=h, engine='openpyxl')
-                if not df.empty and len(df.columns) > 1:
+                if df is not None and not df.empty and len(df.columns) > 2:
                     return df, h
             except Exception:
                 continue
 
+    # 🚨 EL SALVAVIDAS SUPREMO: Si lo de arriba falló, lee el archivo crudo como venga
     try:
         archivo.seek(0)
-        df = pd.read_excel(archivo)
+        if nombre_archivo.endswith('.xls'):
+            df = pd.read_excel(archivo, engine='xlrd', header=0)
+        elif nombre_archivo.endswith('.csv'):
+            df = pd.read_csv(archivo, encoding='latin-1', header=0)
+        else:
+            df = pd.read_excel(archivo, engine='openpyxl', header=0)
+            
+        # Forzamos que las columnas sean texto para evitar errores
+        df.columns = [str(c).strip() for c in df.columns]
         return df, 0
     except Exception:
         return None, 0
