@@ -455,6 +455,38 @@ def cargar_google_sheets(url: str):
         return None, 0, f"No se pudo cargar la hoja: {e}"
 
 
+# ─── Debug helpers ───────────────────────────────────────────────────────────
+def _debug_scan(archivo, es_csv: bool) -> list:
+    """Prueba header=0..5 y devuelve métricas de cada candidato."""
+    resultados = []
+    for h in range(6):
+        try:
+            archivo.seek(0)
+            df = pd.read_csv(archivo, header=h) if es_csv \
+                 else pd.read_excel(archivo, header=h)
+            real_cols = sum(
+                1 for c in df.columns
+                if not str(c).startswith("Unnamed")
+                and not str(c).strip().replace(".", "").isdigit()
+            )
+            resultados.append({
+                "header": h,
+                "fila Excel": h + 1,
+                "cols reales": real_cols,
+                "filas de datos": len(df),
+                "score": round(real_cols * (1 + len(df))),
+                "columnas detectadas": " | ".join(str(c) for c in df.columns[:6]),
+            })
+        except Exception as e:
+            resultados.append({
+                "header": h, "fila Excel": h + 1,
+                "cols reales": 0, "filas de datos": 0, "score": 0,
+                "columnas detectadas": f"❌ {e}",
+            })
+    archivo.seek(0)
+    return resultados
+
+
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
     welcome_slot = st.empty()
@@ -504,6 +536,11 @@ if "df" not in st.session_state:
                     label_visibility="collapsed",
                 )
                 st.caption("Formatos aceptados: Excel (.xlsx / .xls) · CSV (.csv)")
+                debug_mode = st.checkbox(
+                    "🔍 Modo diagnóstico",
+                    value=False,
+                    help="Muestra filas raw, puntajes por header y el header elegido — útil cuando el archivo aparece vacío",
+                )
                 # Inyecta MIME types al input nativo para que Android/iOS
                 # muestren los archivos Excel en el selector del sistema.
                 # Streamlit sólo pone extensiones en accept; los MIME types
@@ -553,8 +590,71 @@ if "df" not in st.session_state:
         es_csv = archivo.name.lower().endswith(".csv")
         df_cargado, header_row = detectar_df(archivo, es_csv)
         nombre_archivo = archivo.name
-        error_msg = None if (df_cargado is not None and not df_cargado.empty) \
-                    else "El archivo está vacío o no se pudo leer."
+        hay_error = df_cargado is None or df_cargado.empty
+
+        # Panel de diagnóstico: se abre si debug_mode está activo O si hay error
+        if debug_mode or hay_error:
+            with st.expander("🔍 Diagnóstico de lectura", expanded=True):
+
+                # ① Filas raw del archivo (sin aplicar ningún header)
+                st.markdown("**① Primeras 8 filas sin procesar:**")
+                try:
+                    archivo.seek(0)
+                    raw = pd.read_csv(archivo, header=None, nrows=8) if es_csv \
+                          else pd.read_excel(archivo, header=None, nrows=8)
+                    archivo.seek(0)
+                    st.dataframe(raw.astype(str), use_container_width=True)
+                except Exception as e:
+                    st.warning(f"No se pudo leer raw: {e}")
+
+                # ② Puntajes para header=0..5
+                st.markdown("**② Puntaje de cada fila como posible encabezado:**")
+                scan = _debug_scan(archivo, es_csv)
+                mejor_h = max(scan, key=lambda r: r["score"])["header"] if scan else 0
+                df_scan = pd.DataFrame(scan)
+                df_scan.insert(0, "elegido", df_scan["header"].apply(
+                    lambda h: "✅" if h == mejor_h else ""
+                ))
+                st.dataframe(df_scan, use_container_width=True, hide_index=True)
+
+                # ③ Veredicto
+                st.markdown("**③ Resultado:**")
+                if not hay_error:
+                    st.success(
+                        f"header={header_row} (fila {header_row + 1} del Excel) — "
+                        f"{len(df_cargado):,} filas × {len(df_cargado.columns)} columnas"
+                    )
+                    st.code(" | ".join(str(c) for c in df_cargado.columns))
+                else:
+                    st.error("No se encontró ningún encabezado con datos válidos.")
+
+        if hay_error:
+            if not debug_mode:
+                st.error("El archivo está vacío o no se pudo leer.")
+
+        else:
+            # Archivo leído correctamente — preparar sesión
+            col_map, match_map = {}, {}
+            for target, info in COLUMN_TARGETS.items():
+                col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
+                col_map[target]   = col
+                match_map[target] = mtype
+            st.session_state.update({
+                "df":         df_cargado,
+                "filename":   nombre_archivo,
+                "header_row": header_row,
+                "col_map":    col_map,
+                "match_map":  match_map,
+            })
+            if debug_mode:
+                # En modo debug no hacemos rerun automático: el usuario lee el diagnóstico
+                # y decide si continuar
+                if st.button("▶️ Continuar al dashboard", type="primary", use_container_width=True):
+                    welcome_slot.empty()
+                    st.rerun()
+            else:
+                welcome_slot.empty()
+                st.rerun()
 
     # ─ Procesar Google Sheets ─────────────────────────────────────────────────
     elif sheets_url and cargar_btn:
@@ -562,27 +662,23 @@ if "df" not in st.session_state:
             df_cargado, header_row, error_msg = cargar_google_sheets(sheets_url)
         nombre_archivo = "Google Sheets"
 
-    else:
-        df_cargado, header_row, nombre_archivo, error_msg = None, 0, None, None
-
-    if error_msg:
-        st.error(error_msg)
-    elif df_cargado is not None:
-        col_map, match_map = {}, {}
-        for target, info in COLUMN_TARGETS.items():
-            col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
-            col_map[target]   = col
-            match_map[target] = mtype
-
-        st.session_state.update({
-            "df":         df_cargado,
-            "filename":   nombre_archivo,
-            "header_row": header_row,
-            "col_map":    col_map,
-            "match_map":  match_map,
-        })
-        welcome_slot.empty()
-        st.rerun()
+        if error_msg:
+            st.error(error_msg)
+        elif df_cargado is not None:
+            col_map, match_map = {}, {}
+            for target, info in COLUMN_TARGETS.items():
+                col, mtype = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
+                col_map[target]   = col
+                match_map[target] = mtype
+            st.session_state.update({
+                "df":         df_cargado,
+                "filename":   nombre_archivo,
+                "header_row": header_row,
+                "col_map":    col_map,
+                "match_map":  match_map,
+            })
+            welcome_slot.empty()
+            st.rerun()
 
     st.markdown(FOOTER, unsafe_allow_html=True)
     st.stop()
