@@ -1,4 +1,3 @@
-import os
 import sys
 import pathlib
 import streamlit as st
@@ -7,6 +6,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, es_admin, calcular_turno
+from utils.db import insertar, leer, leer_todo
 
 st.set_page_config(
     page_title="Incidencias · LogiTrack",
@@ -19,8 +19,6 @@ C_PRIMARY   = "#FF8C69"
 C_SECONDARY = "#FFF3C4"
 C_TEXT      = "#2D2D2D"
 C_MUTED     = "#9E9E9E"
-
-RUTA_CSV = "incidencias_turnos.csv"
 
 TIPOS_NOVEDAD = [
     "Demora en entrega",
@@ -188,7 +186,7 @@ if registrar:
             "heredada_de":  "",
             "resuelto_por": "",
         }
-        pd.DataFrame([nueva]).to_csv(RUTA_CSV, mode="a", header=not os.path.exists(RUTA_CSV), index=False)
+        insertar(nueva)
         st.session_state.pop("_lookup", None)
         st.session_state.pop("_last_search", None)
         st.session_state["_ok_msg"] = f"✅ Incidencia registrada · Tracking **{f_tracking.strip()}** · Prioridad **{f_prioridad}**"
@@ -207,41 +205,36 @@ ESTILOS_PRIO = {
 def _style_fila(row):
     return [ESTILOS_PRIO.get(row.get("Prioridad", ""), "")] * len(row)
 
-if os.path.exists(RUTA_CSV):
-    hist = pd.read_csv(RUTA_CSV, dtype=str).fillna("")
-    if es_admin():
-        hoy  = datetime.now().strftime("%Y-%m-%d")
-        hist = hist[hist["turno_id"].str.startswith(hoy)]
-    else:
-        hist = hist[hist["turno_id"] == _turno_id]
+hist = leer_todo() if es_admin() else leer(_turno_id)
+if es_admin() and not hist.empty and "turno_id" in hist.columns:
+    hoy  = datetime.now().strftime("%Y-%m-%d")
+    hist = hist[hist["turno_id"].str.startswith(hoy)]
 
-    if hist.empty:
-        st.info("Sin incidencias registradas en este turno.")
-    else:
-        cols_vis = ["timestamp", "tracking", "cadete", "empresa", "zona", "tipo", "prioridad", "estado"]
-        cols_vis  = [c for c in cols_vis if c in hist.columns]
-        tabla     = (
-            hist[cols_vis]
-            .rename(columns=str.capitalize)
-            .sort_values("Timestamp", ascending=False)
-            .reset_index(drop=True)
-        )
-        st.dataframe(
-            tabla.style.apply(_style_fila, axis=1),
-            use_container_width=True, hide_index=True,
-        )
-        col_info, col_dl = st.columns([3, 1])
-        with col_info:
-            altas = (hist["prioridad"] == "Alta").sum()
-            st.caption(f"Total: **{len(hist)}** incidencia(s) · Alta prioridad: **{altas}** · Turno {_turno.capitalize()}")
-        with col_dl:
-            csv_bytes = hist.to_csv(index=False).encode("utf-8")
-            st.download_button(
-                "⬇️ Exportar CSV", data=csv_bytes,
-                file_name=f"incidencias_{_turno_id}.csv",
-                mime="text/csv", use_container_width=True,
-            )
-else:
+if hist.empty:
     st.info("Sin incidencias registradas en este turno.")
+else:
+    cols_vis = ["timestamp", "tracking", "cadete", "empresa", "zona", "tipo", "prioridad", "estado"]
+    cols_vis  = [c for c in cols_vis if c in hist.columns]
+    tabla     = (
+        hist[cols_vis]
+        .rename(columns=str.capitalize)
+        .sort_values("Timestamp", ascending=False)
+        .reset_index(drop=True)
+    )
+    st.dataframe(
+        tabla.style.apply(_style_fila, axis=1),
+        use_container_width=True, hide_index=True,
+    )
+    col_info, col_dl = st.columns([3, 1])
+    with col_info:
+        altas = (hist["prioridad"] == "Alta").sum()
+        st.caption(f"Total: **{len(hist)}** incidencia(s) · Alta prioridad: **{altas}** · Turno {_turno.capitalize()}")
+    with col_dl:
+        csv_bytes = hist.to_csv(index=False).encode("utf-8")
+        st.download_button(
+            "⬇️ Exportar CSV", data=csv_bytes,
+            file_name=f"incidencias_{_turno_id}.csv",
+            mime="text/csv", use_container_width=True,
+        )
 
 st.markdown('<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por Ayelen Anaquin</div>', unsafe_allow_html=True)

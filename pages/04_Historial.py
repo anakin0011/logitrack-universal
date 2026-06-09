@@ -7,7 +7,7 @@ from datetime import datetime, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, es_admin
-from utils.turnos import leer_csv
+from utils.db import leer_todo
 
 st.set_page_config(
     page_title="Historial · LogiTrack",
@@ -74,7 +74,7 @@ with col_salir:
         logout()
 
 # ─ Cargar datos ───────────────────────────────────────────────────────────────
-df_raw = leer_csv()
+df_raw = leer_todo()
 
 if df_raw.empty:
     st.info("Sin historial disponible aún. Las incidencias registradas aparecerán acá.")

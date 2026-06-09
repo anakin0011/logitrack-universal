@@ -1,4 +1,3 @@
-import os
 import sys
 import pathlib
 import streamlit as st
@@ -7,6 +6,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin
+from utils.db import insertar, leer_todo
 
 st.set_page_config(
     page_title="Mesa de Soporte · LogiTrack",
@@ -46,8 +46,6 @@ st.markdown(f"""
 
 login_requerido()
 
-RUTA_CSV = "incidencias.csv"
-
 TIPOS_NOVEDAD = [
     "Envío demorado",
     "Destinatario ausente",
@@ -58,15 +56,7 @@ TIPOS_NOVEDAD = [
 ]
 
 def guardar_incidencia(datos: dict):
-    # ── Conexión Supabase ──────────────────────────────────────────────────
-    # from supabase import create_client
-    # url      = st.secrets["SUPABASE_URL"]
-    # key      = st.secrets["SUPABASE_KEY"]
-    # supabase = create_client(url, key)
-    # supabase.table("incidencias").insert(datos).execute()
-    # ──────────────────────────────────────────────────────────────────────
-    fila = pd.DataFrame([datos])
-    fila.to_csv(RUTA_CSV, mode="a", header=not os.path.exists(RUTA_CSV), index=False)
+    insertar(datos)
 
 # ─── Encabezado ───────────────────────────────────────────────────────────────
 _col_hdr, _col_salir = st.columns([5, 1])
@@ -121,12 +111,9 @@ if enviado:
 st.divider()
 st.markdown(f'<p style="font-size:0.68rem;font-weight:700;letter-spacing:0.1em;text-transform:uppercase;color:{C_MUTED};margin-bottom:0.5rem">Novedades registradas en este corte</p>', unsafe_allow_html=True)
 
-if os.path.exists(RUTA_CSV):
-    historial = pd.read_csv(RUTA_CSV)
-    if not historial.empty:
-        st.dataframe(historial[::-1].reset_index(drop=True), use_container_width=True, hide_index=True)
-    else:
-        st.info("Sin novedades registradas aún.")
+historial = leer_todo()
+if not historial.empty:
+    st.dataframe(historial.iloc[::-1].reset_index(drop=True), use_container_width=True, hide_index=True)
 else:
     st.info("Sin novedades registradas aún.")
 
