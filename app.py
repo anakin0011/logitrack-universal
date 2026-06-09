@@ -8,7 +8,7 @@ import plotly.express as px
 import sys
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
-from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin
+from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin, es_demo
 
 st.set_page_config(
     page_title="LogiTrack",
@@ -32,6 +32,10 @@ CHART_COLORS = [C_PRIMARY, C_ACCENT, "#FFB347", "#FFA07A", "#FF7F7F", "#FA8072",
 login_requerido()
 _USUARIO = get_nombre()
 _ROL     = get_rol()
+
+# ── DEBUG TEMPORAL ────────────────────────────────────────────────────────────
+st.write("ROL:", st.session_state.get("auth", {}))
+# ─────────────────────────────────────────────────────────────────────────────
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -278,7 +282,19 @@ def guardar_incidencia(datos: dict):
     pd.DataFrame([datos]).to_csv(ruta, mode="a", header=not os.path.exists(ruta), index=False)
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
-    if not es_admin():
+    if _ROL == "demo":
+        from utils.demo_data import cargar_demo
+        _df_demo = cargar_demo()
+        _cm_demo = {
+            t: buscar_columna(_df_demo.columns.tolist(), t, COLUMN_TARGETS[t]["keywords"])
+            for t in COLUMN_TARGETS
+        }
+        st.session_state["df"]         = _df_demo
+        st.session_state["filename"]   = "corte_demo.xlsx"
+        st.session_state["header_row"] = 0
+        st.session_state["col_map"]    = _cm_demo
+
+    elif _ROL not in ("admin",):
         _, col_c, _ = st.columns([0.15, 3, 0.15])
         with col_c:
             st.markdown("""
@@ -293,39 +309,40 @@ if "df" not in st.session_state:
         st.markdown(FOOTER, unsafe_allow_html=True)
         st.stop()
 
-    welcome_slot = st.empty()
-    with welcome_slot.container():
-        _, col_c, _ = st.columns([0.15, 3, 0.15])
-        with col_c:
-            st.markdown("""
-            <div class="welcome-wrap">
-                <div class="welcome-icon">🚚</div>
-                <p class="welcome-title">LogiTrack Universal</p>
-                <p class="welcome-sub">Módulo de Auditoría y Control de Gestión</p>
-            </div>
-            """, unsafe_allow_html=True)
+    else:
+        welcome_slot = st.empty()
+        with welcome_slot.container():
+            _, col_c, _ = st.columns([0.15, 3, 0.15])
+            with col_c:
+                st.markdown("""
+                <div class="welcome-wrap">
+                    <div class="welcome-icon">🚚</div>
+                    <p class="welcome-title">LogiTrack Universal</p>
+                    <p class="welcome-sub">Módulo de Auditoría y Control de Gestión</p>
+                </div>
+                """, unsafe_allow_html=True)
 
-            archivo = st.file_uploader("Subí tu corte operativo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
-            st.caption("Soporte nativo para cortes operativos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
+                archivo = st.file_uploader("Subí tu corte operativo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
+                st.caption("Soporte nativo para cortes operativos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
-    if archivo is not None:
-        es_csv = archivo.name.lower().endswith(".csv")
-        df_cargado, header_row = detectar_df(archivo, es_csv)
-        
-        if df_cargado is not None and not df_cargado.empty:
-            col_map = {}
-            for target, info in COLUMN_TARGETS.items():
-                col = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
-                col_map[target] = col
-            st.session_state.update({
-                "df": df_cargado, "filename": archivo.name, "header_row": header_row, "col_map": col_map
-            })
-            welcome_slot.empty()
-            st.rerun()
-        else:
-            st.error("❌ No se pudo procesar el corte operativo. Verificá que tenga datos válidos.")
-    st.markdown(FOOTER, unsafe_allow_html=True)
-    st.stop()
+        if archivo is not None:
+            es_csv = archivo.name.lower().endswith(".csv")
+            df_cargado, header_row = detectar_df(archivo, es_csv)
+
+            if df_cargado is not None and not df_cargado.empty:
+                col_map = {}
+                for target, info in COLUMN_TARGETS.items():
+                    col = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
+                    col_map[target] = col
+                st.session_state.update({
+                    "df": df_cargado, "filename": archivo.name, "header_row": header_row, "col_map": col_map
+                })
+                welcome_slot.empty()
+                st.rerun()
+            else:
+                st.error("❌ No se pudo procesar el corte operativo. Verificá que tenga datos válidos.")
+        st.markdown(FOOTER, unsafe_allow_html=True)
+        st.stop()
 
 # ─── DASHBOARD ────────────────────────────────────────────────────────────────
 df          = st.session_state["df"]
@@ -379,7 +396,7 @@ if fecha_col and estado_col and estado_col in df.columns:
 col_h, col_btn, col_out = st.columns([5, 1.1, 0.9])
 with col_h:
     badge_name = filename if len(filename) <= 22 else filename[:22] + "…"
-    rol_badge  = "👑 Admin" if es_admin() else "👤 Coordinadora"
+    rol_badge  = "👑 Admin" if _ROL == "admin" else ("👁️ Demo" if _ROL == "demo" else "👤 Coordinadora")
     st.markdown(f"""
     <div class="dash-header">
         <span style="font-size:1.5rem">📊</span>
@@ -401,6 +418,10 @@ with col_out:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 Salir", use_container_width=True):
         logout()
+
+# ─ Banner demo ───────────────────────────────────────────────────────────────
+if _ROL == "demo":
+    st.info("👁️ **Modo demo** — Estás viendo datos ficticios de ejemplo. No podés subir archivos ni registrar incidencias.", icon=None)
 
 # ─ KPIs ──────────────────────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento (KPIs)</p>', unsafe_allow_html=True)
