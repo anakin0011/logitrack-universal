@@ -166,7 +166,7 @@ def llamar_groq(mensajes: list) -> str:
         from groq import Groq
         client = Groq(api_key=st.secrets["GROQ_API_KEY"])
         respuesta = client.chat.completions.create(
-            model="llama3-70b-8192",
+            model="llama-3.3-70b-versatile",
             messages=mensajes,
             temperature=0.4,
             max_tokens=1024,
