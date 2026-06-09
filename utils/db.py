@@ -19,7 +19,16 @@ COLS_INTERNAS = [
 
 @st.cache_resource
 def _client() -> Client:
-    return create_client(st.secrets["SUPABASE_URL"], st.secrets["SUPABASE_KEY"])
+    try:
+        url = st.secrets["SUPABASE_URL"]
+        key = st.secrets["SUPABASE_KEY"]
+    except KeyError:
+        claves_disponibles = list(st.secrets.keys()) if hasattr(st.secrets, "keys") else "—"
+        raise KeyError(
+            f"No se encontró SUPABASE_URL o SUPABASE_KEY. "
+            f"Claves disponibles en secrets: {claves_disponibles}"
+        )
+    return create_client(url, key)
 
 
 # ─── Mapeo de nombres internos ↔ columnas de Supabase ─────────────────────────
