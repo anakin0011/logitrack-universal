@@ -34,7 +34,7 @@ def heredar_pendientes(turno_id_origen: str, turno_id_destino: str, coordinadora
     if df.empty:
         return 0
 
-    pendientes = df[df["estado"] == "pendiente"]
+    pendientes = df[df["estado"].isin(["pendiente", "en_gestion"])]
     if pendientes.empty:
         return 0
 

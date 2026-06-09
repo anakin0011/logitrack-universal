@@ -116,7 +116,6 @@ def actualizar_estado(turno_id: str, tracking: str, estado: str, resuelto_por: s
             .update(upd)
             .eq("turno_id", turno_id)
             .eq("tracking", tracking)
-            .eq("estado", "pendiente")
             .execute()
         )
         return True
@@ -126,15 +125,16 @@ def actualizar_estado(turno_id: str, tracking: str, estado: str, resuelto_por: s
 
 
 def marcar_transferidos(turno_id: str) -> bool:
-    """Marca en bloque todos los pendientes de un turno como transferido."""
+    """Marca como transferido todo lo activo (pendiente + en_gestion) del turno."""
     try:
-        (
-            _client().table(TABLA)
-            .update({"estado": "transferido"})
-            .eq("turno_id", turno_id)
-            .eq("estado", "pendiente")
-            .execute()
-        )
+        for estado_orig in ("pendiente", "en_gestion"):
+            (
+                _client().table(TABLA)
+                .update({"estado": "transferido"})
+                .eq("turno_id", turno_id)
+                .eq("estado", estado_orig)
+                .execute()
+            )
         return True
     except Exception as e:
         st.error(f"Supabase — error al marcar transferidos: {e}")
