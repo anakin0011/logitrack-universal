@@ -1,7 +1,12 @@
 import os
+import sys
+import pathlib
 import streamlit as st
 import pandas as pd
 from datetime import datetime
+
+sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
+from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin
 
 st.set_page_config(
     page_title="Mesa de Soporte · LogiTrack",
@@ -39,6 +44,8 @@ st.markdown(f"""
 </style>
 """, unsafe_allow_html=True)
 
+login_requerido()
+
 RUTA_CSV = "incidencias.csv"
 
 TIPOS_NOVEDAD = [
@@ -62,12 +69,19 @@ def guardar_incidencia(datos: dict):
     fila.to_csv(RUTA_CSV, mode="a", header=not os.path.exists(RUTA_CSV), index=False)
 
 # ─── Encabezado ───────────────────────────────────────────────────────────────
-st.markdown("""
-<div class="form-header">
-    <p class="form-title">🛠️ Mesa de Soporte Operativo</p>
-    <p class="form-sub">Registro de novedades y gestión de incidencias logísticas</p>
-</div>
-""", unsafe_allow_html=True)
+_col_hdr, _col_salir = st.columns([5, 1])
+with _col_hdr:
+    _rol_badge = "👑 Admin" if es_admin() else "👤 Coordinadora"
+    st.markdown(f"""
+    <div class="form-header">
+        <p class="form-title">🛠️ Mesa de Soporte Operativo</p>
+        <p class="form-sub">Registro de novedades y gestión de incidencias logísticas · {_rol_badge} {get_nombre()}</p>
+    </div>
+    """, unsafe_allow_html=True)
+with _col_salir:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚪 Salir", use_container_width=True):
+        logout()
 
 # ─── Formulario ───────────────────────────────────────────────────────────────
 with st.form("form_incidencia", clear_on_submit=True):

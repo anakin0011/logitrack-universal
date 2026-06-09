@@ -5,6 +5,10 @@ import streamlit as st
 import streamlit.components.v1 as components
 import pandas as pd
 import plotly.express as px
+import sys
+import pathlib
+sys.path.insert(0, str(pathlib.Path(__file__).parent))
+from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin
 
 st.set_page_config(
     page_title="LogiTrack",
@@ -23,6 +27,11 @@ C_MUTED     = "#9E9E9E"
 C_GREEN     = "#52B788"
 
 CHART_COLORS = [C_PRIMARY, C_ACCENT, "#FFB347", "#FFA07A", "#FF7F7F", "#FA8072", "#E9967A", "#FFC0CB"]
+
+# ─── AUTENTICACIÓN ────────────────────────────────────────────────────────────
+login_requerido()
+_USUARIO = get_nombre()
+_ROL     = get_rol()
 
 # ─── CSS ──────────────────────────────────────────────────────────────────────
 st.markdown(f"""
@@ -269,6 +278,21 @@ def guardar_incidencia(datos: dict):
     pd.DataFrame([datos]).to_csv(ruta, mode="a", header=not os.path.exists(ruta), index=False)
 # ─── PANTALLA DE BIENVENIDA ───────────────────────────────────────────────────
 if "df" not in st.session_state:
+    if not es_admin():
+        _, col_c, _ = st.columns([0.15, 3, 0.15])
+        with col_c:
+            st.markdown("""
+            <div class="welcome-wrap">
+                <div class="welcome-icon">⏳</div>
+                <p class="welcome-title">Aguardando corte</p>
+                <p class="welcome-sub">El administrador aún no cargó el corte operativo del día.</p>
+            </div>
+            """, unsafe_allow_html=True)
+            if st.button("🚪 Cerrar Sesión", use_container_width=True):
+                logout()
+        st.markdown(FOOTER, unsafe_allow_html=True)
+        st.stop()
+
     welcome_slot = st.empty()
     with welcome_slot.container():
         _, col_c, _ = st.columns([0.15, 3, 0.15])
@@ -280,7 +304,7 @@ if "df" not in st.session_state:
                 <p class="welcome-sub">Módulo de Auditoría y Control de Gestión</p>
             </div>
             """, unsafe_allow_html=True)
-            
+
             archivo = st.file_uploader("Subí tu corte operativo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
             st.caption("Soporte nativo para cortes operativos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
@@ -336,31 +360,51 @@ if estado_col and estado_col in df.columns:
 
 total_anomalias = total_pendientes + total_en_viaje + total_rechazados + total_motivo
 otd_pct = f"{(total_entregados / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
-dev_pct = f"{(total_anomalias  / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
+inc_pct = f"{((total_pendientes + total_en_viaje) / total_orders * 100):.1f}%" if total_orders > 0 else "0.0%"
+tracking_col = next((c for c in df.columns if "tracking" in str(c).lower()), None)
+
+# Pendientes críticos: sin resolver más de 48hs
+fecha_col = next((c for c in df.columns if any(kw in str(c).lower() for kw in ["fecha", "date", "hora", "timestamp", "creado", "ingreso"])), None)
+pendientes_criticos = 0
+if fecha_col and estado_col and estado_col in df.columns:
+    try:
+        fechas = pd.to_datetime(df[fecha_col], errors='coerce', dayfirst=True)
+        horas_transcurridas = (pd.Timestamp.now() - fechas).dt.total_seconds() / 3600
+        mask_critico = (mask_pend_puro | mask_en_viaje) & (horas_transcurridas > 48)
+        pendientes_criticos = int(mask_critico.sum())
+    except Exception:
+        pendientes_criticos = 0
 
 # ─ Header ────────────────────────────────────────────────────────────────────
-col_h, col_btn = st.columns([5, 1])
+col_h, col_btn, col_out = st.columns([5, 1.1, 0.9])
 with col_h:
     badge_name = filename if len(filename) <= 22 else filename[:22] + "…"
+    rol_badge  = "👑 Admin" if es_admin() else "👤 Coordinadora"
     st.markdown(f"""
     <div class="dash-header">
         <span style="font-size:1.5rem">📊</span>
         <div>
             <p class="dash-brand">LogiTrack - Panel Corporativo</p>
-            <p class="dash-meta">{total_orders:,} unidades auditadas</p>
+            <p class="dash-meta">{total_orders:,} unidades auditadas · {rol_badge} {_USUARIO}</p>
         </div>
         <span class="file-badge">📂 {badge_name}</span>
     </div>
     """, unsafe_allow_html=True)
 with col_btn:
     st.markdown("<br>", unsafe_allow_html=True)
-    if st.button("🔄 Nuevo Corte", use_container_width=True):
+    if es_admin() and st.button("🔄 Nuevo Corte", use_container_width=True):
+        auth_data = st.session_state.get("auth")
         st.session_state.clear()
+        st.session_state["auth"] = auth_data
         st.rerun()
+with col_out:
+    st.markdown("<br>", unsafe_allow_html=True)
+    if st.button("🚪 Salir", use_container_width=True):
+        logout()
 
 # ─ KPIs ──────────────────────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento (KPIs)</p>', unsafe_allow_html=True)
-k1, k2, k3 = st.columns(3)
+k1, k2, k3, k4 = st.columns(4)
 with k1:
     st.markdown(f"""
     <div class="kpi-card" style="border-color:{C_PRIMARY}">
@@ -371,16 +415,62 @@ with k2:
     st.markdown(f"""
     <div class="kpi-card" style="border-color:{C_GREEN}">
         <div class="kpi-num" style="color:{C_GREEN}">{otd_pct}</div>
-        <div class="kpi-lbl">ON TIME DELIVERY (OTD)</div>
+        <div class="kpi-lbl">% OTD — ENTREGAS EFECTIVAS</div>
     </div>""", unsafe_allow_html=True)
 with k3:
     st.markdown(f"""
     <div class="kpi-card" style="border-color:{C_ACCENT}">
-        <div class="kpi-num" style="color:{C_ACCENT}">{dev_pct}</div>
-        <div class="kpi-lbl">TASA DE DEVOLUCIONES / REBOTES</div>
+        <div class="kpi-num" style="color:{C_ACCENT}">{inc_pct}</div>
+        <div class="kpi-lbl">TASA DE INCIDENCIA</div>
+    </div>""", unsafe_allow_html=True)
+with k4:
+    _color_crit = "#C0392B" if pendientes_criticos > 0 else C_MUTED
+    st.markdown(f"""
+    <div class="kpi-card" style="border-color:{_color_crit}">
+        <div class="kpi-num" style="color:{_color_crit}">{pendientes_criticos}</div>
+        <div class="kpi-lbl">PENDIENTES CRÍTICOS +48HS</div>
     </div>""", unsafe_allow_html=True)
 
 st.divider()
+
+# ─ LISTA NEGRA: Pendientes en Riesgo ─────────────────────────────────────────
+if not df_alertas.empty and estado_col and estado_col in df.columns:
+    s_riesgo = norm_estados(df_alertas[estado_col])
+    prioridad = pd.Series(4, index=df_alertas.index)
+    prioridad[s_riesgo.str.contains("rechazado|devuelto|rebote", na=False)] = 1
+    prioridad[s_riesgo.str.contains("pendiente", na=False, regex=False)] = 2
+    prioridad[s_riesgo.str.contains("en viaje|en camino", na=False)] = 3
+    df_riesgo = df_alertas.copy()
+    df_riesgo["__prio"] = prioridad.values
+    df_riesgo = df_riesgo.sort_values("__prio")
+
+    cols_sel = {k: v for k, v in [
+        ("Tracking", tracking_col), ("Cadete", cadete_col),
+        ("Empresa", empresa_col), ("Zona", zona_col), ("Estado", estado_col)
+    ] if v and v in df_riesgo.columns}
+
+    df_tabla_riesgo = (
+        df_riesgo[[v for v in cols_sel.values()]]
+        .rename(columns={v: k for k, v in cols_sel.items()})
+        .reset_index(drop=True)
+    )
+
+    st.markdown("""
+    <div style="background:#C0392B; color:white; padding:0.75rem 1.2rem;
+        border-radius:10px 10px 0 0; font-weight:800; font-size:1.05rem; margin-top:0.5rem;">
+        ⚠️ Pendientes en Riesgo
+    </div>
+    """, unsafe_allow_html=True)
+
+    st.dataframe(
+        df_tabla_riesgo.style.set_properties(**{
+            "background-color": "#FFEBEE",
+            "color": "#C0392B",
+            "font-weight": "600",
+        }),
+        use_container_width=True, hide_index=True
+    )
+    st.markdown("<br>", unsafe_allow_html=True)
 
 # ─ 1. ALERTAS CRÍTICAS ───────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">🚨 Alertas Críticas del Corte</p>', unsafe_allow_html=True)
@@ -427,32 +517,57 @@ if radio_opts:
             id_vars=["Nombre"], value_vars=["Entregados", "Pendientes", "Rechazados"],
             var_name="Estado", value_name="Cantidad"
         )
+
         if target_key == "Cadete":
-            fig = px.bar(
-                df_melt, x="Nombre", y="Cantidad", color="Estado",
-                color_discrete_map=COLOR_ESTADOS,
-                template="plotly_white", text="Cantidad", barmode="stack"
-            )
+            tabla["Efectividad %"] = (tabla["Entregados"] / tabla["Total"].replace(0, 1) * 100).round(1)
+            tabla = tabla.sort_values("Efectividad %", ascending=False).reset_index(drop=True)
+            tabla.insert(0, "Rank", range(1, len(tabla) + 1))
+            fig = px.bar(df_melt, x="Nombre", y="Cantidad", color="Estado",
+                color_discrete_map=COLOR_ESTADOS, template="plotly_white", text="Cantidad", barmode="stack")
             fig.update_layout(height=380, margin=dict(t=10, b=50, l=10, r=10))
-        else:
-            fig = px.bar(
-                df_melt.head(45), x="Cantidad", y="Nombre", color="Estado",
-                color_discrete_map=COLOR_ESTADOS,
-                template="plotly_white", text="Cantidad", barmode="stack", orientation="h"
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown('<p class="section-lbl">Ranking de Efectividad por Cadete</p>', unsafe_allow_html=True)
+
+            def color_cadete(row):
+                if "Efectividad %" in row.index:
+                    if row["Efectividad %"] < 80:
+                        return ["background-color:#FFEBEE; color:#C0392B; font-weight:700;"] * len(row)
+                    if row["Efectividad %"] > 95:
+                        return ["background-color:#E8F5E9; color:#2E7D32; font-weight:700;"] * len(row)
+                return [""] * len(row)
+
+            st.dataframe(
+                tabla.style.apply(color_cadete, axis=1).format({"Efectividad %": "{:.1f}%"}),
+                use_container_width=True, hide_index=True
             )
+
+        else:
+            tabla["% Pendientes"] = (tabla["Pendientes"] / tabla["Total"].replace(0, 1) * 100).round(1)
+            fig = px.bar(df_melt.head(45), x="Cantidad", y="Nombre", color="Estado",
+                color_discrete_map=COLOR_ESTADOS, template="plotly_white", text="Cantidad",
+                barmode="stack", orientation="h")
             fig.update_layout(
                 height=max(300, min(len(tabla) * 38, 560)),
                 margin=dict(t=10, b=10, l=10, r=10), yaxis_title=""
             )
-        st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
-        lbl_tabla = "Rendimiento por Chofer" if target_key == "Cadete" else "Unidades por Empresa"
-        st.markdown(f'<p class="section-lbl">{lbl_tabla}</p>', unsafe_allow_html=True)
-        st.dataframe(tabla, use_container_width=True, hide_index=True)
+            st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
+            st.markdown('<p class="section-lbl">Unidades por Empresa</p>', unsafe_allow_html=True)
+
+            def color_empresa(row):
+                if "% Pendientes" in row.index and row["% Pendientes"] > 20:
+                    return ["background-color:#FFEBEE; color:#C0392B;"] * len(row)
+                return [""] * len(row)
+
+            st.dataframe(
+                tabla.style.apply(color_empresa, axis=1).format({"% Pendientes": "{:.1f}%"}),
+                use_container_width=True, hide_index=True
+            )
 
     else:
         df_grouped = df.groupby(col_agrup, dropna=False).size().reset_index(name="Unidades").sort_values("Unidades", ascending=False)
         df_grouped[col_agrup] = df_grouped[col_agrup].fillna("Sin Datos").astype(str)
-        fig = px.bar(df_grouped.head(15), x=col_agrup, y="Unidades", color=col_agrup, color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Unidades")
+        fig = px.bar(df_grouped.head(15), x=col_agrup, y="Unidades", color=col_agrup,
+            color_discrete_sequence=CHART_COLORS, template="plotly_white", text="Unidades")
         fig.update_layout(showlegend=False, height=350, margin=dict(t=10, b=40, l=10, r=10))
         st.plotly_chart(fig, use_container_width=True, config={"displayModeBar": False})
 
