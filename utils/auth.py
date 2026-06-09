@@ -66,7 +66,13 @@ def _mostrar_login():
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown("<br>", unsafe_allow_html=True)
+    st.markdown(f"""
+    <div style="background:#E3F2FD; border-radius:10px; padding:0.75rem 1rem;
+        border-left:4px solid #1565C0; font-size:0.83rem; color:#1565C0; margin-bottom:0.5rem;">
+        <b>🔍 Acceso demo</b><br>
+        Usuario: <b>demo</b> &nbsp;·&nbsp; Contraseña: <b>demo123</b>
+    </div>
+    """, unsafe_allow_html=True)
 
     with st.form("form_login"):
         usuario  = st.text_input("Usuario", placeholder="ingresá tu usuario")
@@ -108,6 +114,10 @@ def get_turno() -> str:
 
 def es_admin() -> bool:
     return get_rol() == "admin"
+
+
+def es_demo() -> bool:
+    return get_rol() == "demo"
 
 
 def calcular_turno(ahora: datetime = None) -> tuple:

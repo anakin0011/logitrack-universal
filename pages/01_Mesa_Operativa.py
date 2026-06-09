@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-from utils.auth import login_requerido, logout, get_nombre, es_admin, calcular_turno
+from utils.auth import login_requerido, logout, get_nombre, es_admin, es_demo, calcular_turno
 from utils.db import insertar, leer, leer_todo
 
 st.set_page_config(
@@ -72,7 +72,7 @@ st.markdown(f"""
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    rol_badge = "👑 Admin" if es_admin() else "👤 Coordinadora"
+    rol_badge = "👑 Admin" if es_admin() else ("👁️ Demo" if es_demo() else "👤 Coordinadora")
     st.markdown(f"""
     <div class="page-header">
         <span style="font-size:1.5rem">📋</span>
@@ -148,49 +148,52 @@ if lookup.get("tracking"):
     st.markdown(f'<div class="lookup-box">{filas}</div>', unsafe_allow_html=True)
 
 # ─ Formulario ─────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-lbl">Nueva incidencia</p>', unsafe_allow_html=True)
+if es_demo():
+    st.info("🔍 Modo demo: podés consultar las incidencias del turno pero no registrar nuevas.")
+else:
+    st.markdown('<p class="section-lbl">Nueva incidencia</p>', unsafe_allow_html=True)
 
-with st.form("form_incidencia", clear_on_submit=True):
-    col_a, col_b = st.columns(2)
-    with col_a:
-        f_tracking = st.text_input("Tracking *",  value=lookup.get("tracking", ""), placeholder="nro. de tracking")
-        f_cadete   = st.text_input("Cadete",      value=lookup.get("cadete",   ""), placeholder="nombre del cadete")
-        f_empresa  = st.text_input("Empresa",     value=lookup.get("empresa",  ""), placeholder="empresa remitente")
-    with col_b:
-        f_zona      = st.text_input("Zona",       value=lookup.get("zona",     ""), placeholder="zona de entrega")
-        f_tipo      = st.selectbox("Tipo de novedad *", TIPOS_NOVEDAD)
-        f_prioridad = st.radio("Prioridad *", ["Alta", "Media", "Baja"], horizontal=True)
+    with st.form("form_incidencia", clear_on_submit=True):
+        col_a, col_b = st.columns(2)
+        with col_a:
+            f_tracking = st.text_input("Tracking *",  value=lookup.get("tracking", ""), placeholder="nro. de tracking")
+            f_cadete   = st.text_input("Cadete",      value=lookup.get("cadete",   ""), placeholder="nombre del cadete")
+            f_empresa  = st.text_input("Empresa",     value=lookup.get("empresa",  ""), placeholder="empresa remitente")
+        with col_b:
+            f_zona      = st.text_input("Zona",       value=lookup.get("zona",     ""), placeholder="zona de entrega")
+            f_tipo      = st.selectbox("Tipo de novedad *", TIPOS_NOVEDAD)
+            f_prioridad = st.radio("Prioridad *", ["Alta", "Media", "Baja"], horizontal=True)
 
-    f_desc    = st.text_area("Descripción *", height=90, placeholder="Describí la novedad con detalle…")
-    registrar = st.form_submit_button("📋 Registrar Incidencia", use_container_width=True)
+        f_desc    = st.text_area("Descripción *", height=90, placeholder="Describí la novedad con detalle…")
+        registrar = st.form_submit_button("📋 Registrar Incidencia", use_container_width=True)
 
-if registrar:
-    if not f_tracking.strip():
-        st.warning("⚠️ El número de tracking es obligatorio.")
-    elif not f_desc.strip():
-        st.warning("⚠️ La descripción es obligatoria.")
-    else:
-        nueva = {
-            "timestamp":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-            "turno_id":     _turno_id,
-            "turno":        _turno,
-            "coordinadora": _nombre,
-            "tracking":     f_tracking.strip(),
-            "cadete":       f_cadete.strip(),
-            "empresa":      f_empresa.strip(),
-            "zona":         f_zona.strip(),
-            "tipo":         f_tipo,
-            "descripcion":  f_desc.strip(),
-            "prioridad":    f_prioridad,
-            "estado":       "pendiente",
-            "heredada_de":  "",
-            "resuelto_por": "",
-        }
-        insertar(nueva)
-        st.session_state.pop("_lookup", None)
-        st.session_state.pop("_last_search", None)
-        st.session_state["_ok_msg"] = f"✅ Incidencia registrada · Tracking **{f_tracking.strip()}** · Prioridad **{f_prioridad}**"
-        st.rerun()
+    if registrar:
+        if not f_tracking.strip():
+            st.warning("⚠️ El número de tracking es obligatorio.")
+        elif not f_desc.strip():
+            st.warning("⚠️ La descripción es obligatoria.")
+        else:
+            nueva = {
+                "timestamp":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                "turno_id":     _turno_id,
+                "turno":        _turno,
+                "coordinadora": _nombre,
+                "tracking":     f_tracking.strip(),
+                "cadete":       f_cadete.strip(),
+                "empresa":      f_empresa.strip(),
+                "zona":         f_zona.strip(),
+                "tipo":         f_tipo,
+                "descripcion":  f_desc.strip(),
+                "prioridad":    f_prioridad,
+                "estado":       "pendiente",
+                "heredada_de":  "",
+                "resuelto_por": "",
+            }
+            insertar(nueva)
+            st.session_state.pop("_lookup", None)
+            st.session_state.pop("_last_search", None)
+            st.session_state["_ok_msg"] = f"✅ Incidencia registrada · Tracking **{f_tracking.strip()}** · Prioridad **{f_prioridad}**"
+            st.rerun()
 
 # ─ Tabla del turno ────────────────────────────────────────────────────────────
 st.divider()
@@ -225,16 +228,19 @@ else:
         tabla.style.apply(_style_fila, axis=1),
         use_container_width=True, hide_index=True,
     )
-    col_info, col_dl = st.columns([3, 1])
-    with col_info:
-        altas = (hist["prioridad"] == "Alta").sum()
+    altas = (hist["prioridad"] == "Alta").sum()
+    if es_demo():
         st.caption(f"Total: **{len(hist)}** incidencia(s) · Alta prioridad: **{altas}** · Turno {_turno.capitalize()}")
-    with col_dl:
-        csv_bytes = hist.to_csv(index=False).encode("utf-8")
-        st.download_button(
-            "⬇️ Exportar CSV", data=csv_bytes,
-            file_name=f"incidencias_{_turno_id}.csv",
-            mime="text/csv", use_container_width=True,
-        )
+    else:
+        col_info, col_dl = st.columns([3, 1])
+        with col_info:
+            st.caption(f"Total: **{len(hist)}** incidencia(s) · Alta prioridad: **{altas}** · Turno {_turno.capitalize()}")
+        with col_dl:
+            csv_bytes = hist.to_csv(index=False).encode("utf-8")
+            st.download_button(
+                "⬇️ Exportar CSV", data=csv_bytes,
+                file_name=f"incidencias_{_turno_id}.csv",
+                mime="text/csv", use_container_width=True,
+            )
 
 st.markdown('<div class="app-footer">🚚 LogiTrack Universal · Mesa Operativa · Desarrollado por Ayelen Anaquin</div>', unsafe_allow_html=True)

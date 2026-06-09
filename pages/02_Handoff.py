@@ -5,7 +5,7 @@ import pandas as pd
 from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-from utils.auth import login_requerido, logout, get_nombre, es_admin, calcular_turno
+from utils.auth import login_requerido, logout, get_nombre, es_admin, es_demo, calcular_turno
 from utils.turnos import (
     turno_siguiente_id,
     incidencias_de,
@@ -74,7 +74,7 @@ st.markdown(f"""
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    rol_badge = "👑 Admin" if es_admin() else "👤 Coordinadora"
+    rol_badge = "👑 Admin" if es_admin() else ("👁️ Demo" if es_demo() else "👤 Coordinadora")
     st.markdown(f"""
     <div class="page-header">
         <span style="font-size:1.5rem">🔄</span>
@@ -211,7 +211,9 @@ else:
 
 st.markdown(f'<div class="resumen-box">{resumen_texto}</div>', unsafe_allow_html=True)
 
-if not st.session_state.get("_confirmar_cierre"):
+if es_demo():
+    st.info("🔍 Modo demo: podés ver el estado del turno pero no podés cerrarlo.")
+elif not st.session_state.get("_confirmar_cierre"):
     if st.button("🔒 Cerrar Turno y Pasar Pendientes →", use_container_width=True):
         st.session_state["_confirmar_cierre"] = True
         st.rerun()

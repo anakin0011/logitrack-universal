@@ -6,7 +6,7 @@ import pandas as pd
 from datetime import datetime, timedelta
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
-from utils.auth import login_requerido, logout, get_nombre, es_admin
+from utils.auth import login_requerido, logout, get_nombre, es_admin, es_demo
 from utils.db import leer_todo
 
 st.set_page_config(
@@ -58,7 +58,7 @@ st.markdown(f"""
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    rol_badge = "👑 Admin" if es_admin() else "👤 Coordinadora"
+    rol_badge = "👑 Admin" if es_admin() else ("👁️ Demo" if es_demo() else "👤 Coordinadora")
     st.markdown(f"""
     <div class="page-header">
         <span style="font-size:1.5rem">📁</span>
@@ -244,35 +244,36 @@ if turno_sel_id:
 st.divider()
 
 # ─ Exportar ───────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-lbl">Exportar</p>', unsafe_allow_html=True)
+if not es_demo():
+    st.markdown('<p class="section-lbl">Exportar</p>', unsafe_allow_html=True)
 
-def _a_excel(df_resumen, df_completo) -> bytes:
-    buf = io.BytesIO()
-    with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
-        df_resumen.to_excel(writer, sheet_name="Resumen por turno", index=False)
-        df_completo.to_excel(writer, sheet_name="Detalle completo", index=False)
-        for sheet in writer.sheets.values():
-            sheet.set_column(0, 20, 18)
-    return buf.getvalue()
+    def _a_excel(df_resumen, df_completo) -> bytes:
+        buf = io.BytesIO()
+        with pd.ExcelWriter(buf, engine="xlsxwriter") as writer:
+            df_resumen.to_excel(writer, sheet_name="Resumen por turno", index=False)
+            df_completo.to_excel(writer, sheet_name="Detalle completo", index=False)
+            for sheet in writer.sheets.values():
+                sheet.set_column(0, 20, 18)
+        return buf.getvalue()
 
-df_completo_exp = df[
-    [c for c in ["turno_id", "timestamp", "coordinadora", "tracking", "cadete",
-                 "empresa", "zona", "tipo", "prioridad", "estado",
-                 "descripcion", "heredada_de", "resuelto_por"] if c in df.columns]
-].sort_values(["turno_id", "timestamp"], ascending=[False, False])
+    df_completo_exp = df[
+        [c for c in ["turno_id", "timestamp", "coordinadora", "tracking", "cadete",
+                     "empresa", "zona", "tipo", "prioridad", "estado",
+                     "descripcion", "heredada_de", "resuelto_por"] if c in df.columns]
+    ].sort_values(["turno_id", "timestamp"], ascending=[False, False])
 
-nombre_archivo = f"historial_{fecha_desde}_{fecha_hasta}.xlsx"
+    nombre_archivo = f"historial_{fecha_desde}_{fecha_hasta}.xlsx"
 
-ex1, ex2 = st.columns([1, 3])
-with ex1:
-    st.download_button(
-        "⬇️ Descargar Excel",
-        data=_a_excel(resumen[COLS_RESUMEN], df_completo_exp),
-        file_name=nombre_archivo,
-        mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        use_container_width=True,
-    )
-with ex2:
-    st.caption(f"Exporta **Resumen por turno** + **Detalle completo** en dos hojas · {len(df_completo_exp)} registros filtrados")
+    ex1, ex2 = st.columns([1, 3])
+    with ex1:
+        st.download_button(
+            "⬇️ Descargar Excel",
+            data=_a_excel(resumen[COLS_RESUMEN], df_completo_exp),
+            file_name=nombre_archivo,
+            mime="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+            use_container_width=True,
+        )
+    with ex2:
+        st.caption(f"Exporta **Resumen por turno** + **Detalle completo** en dos hojas · {len(df_completo_exp)} registros filtrados")
 
 st.markdown('<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por Ayelen Anaquin</div>', unsafe_allow_html=True)
