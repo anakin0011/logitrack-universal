@@ -148,52 +148,51 @@ if lookup.get("tracking"):
     st.markdown(f'<div class="lookup-box">{filas}</div>', unsafe_allow_html=True)
 
 # ─ Formulario ─────────────────────────────────────────────────────────────────
-if es_demo():
-    st.info("🔍 Modo demo: podés consultar las incidencias del turno pero no registrar nuevas.")
-else:
-    st.markdown('<p class="section-lbl">Nueva incidencia</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-lbl">Nueva incidencia</p>', unsafe_allow_html=True)
 
-    with st.form("form_incidencia", clear_on_submit=True):
-        col_a, col_b = st.columns(2)
-        with col_a:
-            f_tracking = st.text_input("Tracking *",  value=lookup.get("tracking", ""), placeholder="nro. de tracking")
-            f_cadete   = st.text_input("Cadete",      value=lookup.get("cadete",   ""), placeholder="nombre del cadete")
-            f_empresa  = st.text_input("Empresa",     value=lookup.get("empresa",  ""), placeholder="empresa remitente")
-        with col_b:
-            f_zona      = st.text_input("Zona",       value=lookup.get("zona",     ""), placeholder="zona de entrega")
-            f_tipo      = st.selectbox("Tipo de novedad *", TIPOS_NOVEDAD)
-            f_prioridad = st.radio("Prioridad *", ["Alta", "Media", "Baja"], horizontal=True)
+with st.form("form_incidencia", clear_on_submit=True):
+    col_a, col_b = st.columns(2)
+    with col_a:
+        f_tracking = st.text_input("Tracking *",  value=lookup.get("tracking", ""), placeholder="nro. de tracking")
+        f_cadete   = st.text_input("Cadete",      value=lookup.get("cadete",   ""), placeholder="nombre del cadete")
+        f_empresa  = st.text_input("Empresa",     value=lookup.get("empresa",  ""), placeholder="empresa remitente")
+    with col_b:
+        f_zona      = st.text_input("Zona",       value=lookup.get("zona",     ""), placeholder="zona de entrega")
+        f_tipo      = st.selectbox("Tipo de novedad *", TIPOS_NOVEDAD)
+        f_prioridad = st.radio("Prioridad *", ["Alta", "Media", "Baja"], horizontal=True)
 
-        f_desc    = st.text_area("Descripción *", height=90, placeholder="Describí la novedad con detalle…")
-        registrar = st.form_submit_button("📋 Registrar Incidencia", use_container_width=True)
+    f_desc    = st.text_area("Descripción *", height=90, placeholder="Describí la novedad con detalle…")
+    registrar = st.form_submit_button("📋 Registrar Incidencia", use_container_width=True)
 
-    if registrar:
-        if not f_tracking.strip():
-            st.warning("⚠️ El número de tracking es obligatorio.")
-        elif not f_desc.strip():
-            st.warning("⚠️ La descripción es obligatoria.")
-        else:
-            nueva = {
-                "timestamp":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-                "turno_id":     _turno_id,
-                "turno":        _turno,
-                "coordinadora": _nombre,
-                "tracking":     f_tracking.strip(),
-                "cadete":       f_cadete.strip(),
-                "empresa":      f_empresa.strip(),
-                "zona":         f_zona.strip(),
-                "tipo":         f_tipo,
-                "descripcion":  f_desc.strip(),
-                "prioridad":    f_prioridad,
-                "estado":       "pendiente",
-                "heredada_de":  "",
-                "resuelto_por": "",
-            }
-            insertar(nueva)
-            st.session_state.pop("_lookup", None)
-            st.session_state.pop("_last_search", None)
-            st.session_state["_ok_msg"] = f"✅ Incidencia registrada · Tracking **{f_tracking.strip()}** · Prioridad **{f_prioridad}**"
-            st.rerun()
+if registrar:
+    if not f_tracking.strip():
+        st.warning("⚠️ El número de tracking es obligatorio.")
+    elif not f_desc.strip():
+        st.warning("⚠️ La descripción es obligatoria.")
+    elif es_demo():
+        st.success("✅ Incidencia registrada (modo demo — no se guardó en base de datos)")
+    else:
+        nueva = {
+            "timestamp":    datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+            "turno_id":     _turno_id,
+            "turno":        _turno,
+            "coordinadora": _nombre,
+            "tracking":     f_tracking.strip(),
+            "cadete":       f_cadete.strip(),
+            "empresa":      f_empresa.strip(),
+            "zona":         f_zona.strip(),
+            "tipo":         f_tipo,
+            "descripcion":  f_desc.strip(),
+            "prioridad":    f_prioridad,
+            "estado":       "pendiente",
+            "heredada_de":  "",
+            "resuelto_por": "",
+        }
+        insertar(nueva)
+        st.session_state.pop("_lookup", None)
+        st.session_state.pop("_last_search", None)
+        st.session_state["_ok_msg"] = f"✅ Incidencia registrada · Tracking **{f_tracking.strip()}** · Prioridad **{f_prioridad}**"
+        st.rerun()
 
 # ─ Tabla del turno ────────────────────────────────────────────────────────────
 st.divider()
