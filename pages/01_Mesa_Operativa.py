@@ -9,8 +9,8 @@ from utils.auth import login_requerido, logout, get_nombre, es_admin, calcular_t
 from utils.db import insertar, leer, leer_todo
 
 st.set_page_config(
-    page_title="Incidencias · LogiTrack",
-    page_icon="📋",
+    page_title="Mesa Operativa · LogiTrack",
+    page_icon="🗂️",
     layout="wide",
     initial_sidebar_state="collapsed",
 )
@@ -77,8 +77,8 @@ with col_hdr:
     <div class="page-header">
         <span style="font-size:1.5rem">📋</span>
         <div>
-            <p class="page-brand">Registro de Incidencias</p>
-            <p class="page-meta">Turno: <b>{_turno.capitalize()}</b> · {rol_badge} {_nombre}</p>
+            <p class="page-brand">Mesa Operativa</p>
+            <p class="page-meta">Turno <b>{_turno.capitalize()}</b> detectado automáticamente · {rol_badge} {_nombre}</p>
         </div>
     </div>
     """, unsafe_allow_html=True)
@@ -237,4 +237,4 @@ else:
             mime="text/csv", use_container_width=True,
         )
 
-st.markdown('<div class="app-footer">🚚 LogiTrack Universal · Desarrollado por Ayelen Anaquin</div>', unsafe_allow_html=True)
+st.markdown('<div class="app-footer">🚚 LogiTrack Universal · Mesa Operativa · Desarrollado por Ayelen Anaquin</div>', unsafe_allow_html=True)
