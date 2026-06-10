@@ -421,7 +421,7 @@ if radio_opts:
     analisis_label = st.radio("analisis", options=radio_opts, horizontal=True, label_visibility="collapsed")
     col_agrup, analisis_nombre, target_key = radio_map[analisis_label]
 
-    COLOR_ESTADOS = {"Entregados": C_GREEN, "Pendientes": "#FF6B6B", "Rechazados": "#C0392B"}
+    COLOR_ESTADOS = {"Entregados": DS.SUCCESS, "Pendientes": DS.WARNING, "Rechazados": DS.CRITICAL}
 
     if target_key in ("Cadete", "Nombre Fantasia") and estado_col and estado_col in df.columns:
         tabla = tabla_dimension_estados(df, col_agrup, estado_col)
