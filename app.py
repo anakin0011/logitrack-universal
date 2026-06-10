@@ -9,6 +9,8 @@ import sys
 import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin, es_demo
+from utils.styles import inject_css, kpi_card, badge, header_html, prio_level
+import utils.styles as DS
 
 st.set_page_config(
     page_title="LogiTrack",
@@ -17,16 +19,7 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-# ─── Paleta ───────────────────────────────────────────────────────────────────
-C_PRIMARY   = "#FF8C69"   # salmón
-C_SECONDARY = "#FFF3C4"   # amarillo bebé
-C_ACCENT    = "#FF6B6B"   # coral
-C_TEXT      = "#2D2D2D"   # gris oscuro
-C_BG        = "#FFFFFF"
-C_MUTED     = "#9E9E9E"
-C_GREEN     = "#52B788"
-
-CHART_COLORS = [C_PRIMARY, C_ACCENT, "#FFB347", "#FFA07A", "#FF7F7F", "#FA8072", "#E9967A", "#FFC0CB"]
+CHART_COLORS = [DS.P, "#2E86C1", "#1ABC9C", "#27AE60", "#8E44AD", "#E67E22", "#C0392B", "#7F8C8D"]
 
 # ─── AUTENTICACIÓN ────────────────────────────────────────────────────────────
 login_requerido()
@@ -34,89 +27,17 @@ _USUARIO = get_nombre()
 _ROL     = get_rol()
 
 
-# ─── CSS ──────────────────────────────────────────────────────────────────────
-st.markdown(f"""
+inject_css()
+st.markdown("""
 <style>
-[data-testid="collapsedControl"] {{ display: none !important; }}
-.stApp {{ background: {C_BG}; }}
-.block-container {{ padding-top: 2rem !important; max-width: 1100px; }}
-
-/* Bienvenida */
-.welcome-wrap {{
-    text-align: center;
-    padding: 2.5rem 1rem 1.5rem;
-}}
-.welcome-icon    {{ font-size: 4rem; line-height: 1; margin-bottom: 0.5rem; }}
-.welcome-title   {{ font-size: 2.4rem; font-weight: 800; color: {C_TEXT}; margin: 0 0 0.4rem; }}
-.welcome-sub     {{ font-size: 1.05rem; color: {C_MUTED}; margin: 0 0 1.8rem; }}
-
-/* Header dashboard */
-.dash-header {{
-    display: flex; align-items: center; gap: 0.75rem;
-    background: {C_SECONDARY}; border-radius: 12px;
-    padding: 0.75rem 1.2rem; margin-bottom: 1.2rem;
-    flex-wrap: wrap;
-}}
-.dash-brand {{ font-size: 1.2rem; font-weight: 800; color: {C_TEXT}; margin: 0; }}
-.dash-meta  {{ font-size: 0.78rem; color: {C_MUTED}; margin: 0; }}
-.file-badge {{
-    margin-left: auto; background: {C_PRIMARY}; color: white;
-    border-radius: 999px; padding: 0.2rem 0.9rem;
-    font-size: 0.74rem; font-weight: 700;
-    max-width: 200px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
-}}
-
-/* KPIs */
-.kpi-card {{
-    background: white; border-radius: 12px; padding: 1.2rem 1.5rem;
-    border-top: 4px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.06);
-    text-align: center;
-}}
-.kpi-num {{ font-size: 2.2rem; font-weight: 800; line-height: 1; }}
-.kpi-lbl {{
-    font-size: 0.7rem; font-weight: 700; letter-spacing: 0.08em;
-    text-transform: uppercase; color: {C_MUTED}; margin-top: 0.35rem;
-}}
-
-/* Resumen natural */
-.resumen-box {{ background: {C_SECONDARY}; border-left: 4px solid {C_PRIMARY}; border-radius: 0 10px 10px 0; padding: 1rem 1.2rem; margin: 0.8rem 0 1rem; }}
-.resumen-titulo {{ font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: {C_PRIMARY}; margin-bottom: 0.55rem; }}
-.resumen-line {{ font-size: 0.88rem; color: {C_TEXT}; margin: 0.22rem 0; }}
-.section-lbl {{ font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: {C_MUTED}; margin: 1.4rem 0 0.5rem; }}
-.app-footer {{ margin-top: 3rem; padding-top: 1.2rem; border-top: 2px solid {C_SECONDARY}; text-align: center; color: {C_MUTED}; font-size: 0.82rem; }}
-
-/* Chat */
-.chat-wrap {{ background: {C_SECONDARY}; border-radius: 14px; padding: 1.4rem 1.5rem 1rem; margin-top: 0.5rem; }}
-.chat-title {{ font-size: 1.1rem; font-weight: 800; color: {C_TEXT}; margin: 0 0 0.25rem; }}
-.chat-desc  {{ font-size: 0.85rem; color: {C_MUTED}; margin: 0 0 0.9rem; }}
-
-/* ─── MOBILE RESPONSIVE ──────────────────────────────────────────────── */
-@media (max-width: 768px) {{
-    .block-container {{ padding: 0.5rem 0.6rem 5.5rem !important; max-width: 100% !important; }}
-    .welcome-wrap {{ padding: 1.5rem 0.25rem 1rem; }}
-    .welcome-icon {{ font-size: 3rem; }}
-    .welcome-title {{ font-size: 1.75rem; }}
-    .welcome-sub {{ font-size: 0.9rem; }}
-    .dash-header {{ padding: 0.6rem 0.85rem; gap: 0.3rem; }}
-    .dash-brand {{ font-size: 1.05rem; }}
-    .dash-meta {{ font-size: 0.7rem; }}
-    .file-badge {{ margin-left: 0; max-width: calc(100% - 1rem); font-size: 0.7rem; }}
-    .kpi-card {{ padding: 0.85rem 0.3rem; border-radius: 10px; }}
-    .kpi-num {{ font-size: 1.65rem; }}
-    .kpi-lbl {{ font-size: 0.58rem; }}
-    .section-lbl {{ font-size: 0.62rem; margin: 1rem 0 0.35rem; }}
-    .resumen-box {{ padding: 0.8rem 0.9rem; }}
-    .resumen-line {{ font-size: 0.82rem; }}
-    div[data-testid="stRadio"] > div {{ flex-wrap: wrap !important; gap: 0.35rem !important; }}
-    div[data-testid="stRadio"] label {{ min-height: 44px; display: flex; align-items: center; }}
-    .stButton > button, [data-testid="stDownloadButton"] > button {{ min-height: 48px !important; font-size: 0.88rem !important; width: 100% !important; }}
-    [data-testid="stFileUploadDropzone"] {{ min-height: 100px !important; padding: 1.5rem 1rem !important; }}
-    [data-testid="stDataFrame"] {{ overflow-x: auto !important; -webkit-overflow-scrolling: touch; }}
-    .chat-wrap {{ padding: 1rem 0.9rem 0.75rem; }}
-    .chat-title {{ font-size: 0.95rem; }}
-    .chat-desc {{ font-size: 0.78rem; }}
-    [data-testid="stChatInput"] textarea {{ font-size: 1rem !important; }}
-}}
+.welcome-wrap  { text-align:center; padding:2.5rem 1rem 1.5rem; }
+.welcome-icon  { font-size:3.5rem; line-height:1; margin-bottom:0.5rem; }
+.welcome-title { font-size:2.2rem; font-weight:700; color:#1A1F2B;
+                 margin:0 0 0.35rem; letter-spacing:-0.02em; }
+.welcome-sub   { font-size:1rem; color:#5F6672; margin:0 0 1.8rem; }
+.resumen-titulo { font-size:0.68rem; font-weight:700; letter-spacing:0.1em;
+                  text-transform:uppercase; color:#185FA5; margin-bottom:0.5rem; }
+.resumen-line   { font-size:0.87rem; color:#1A1F2B; margin:0.2rem 0; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -301,7 +222,7 @@ if "df" not in st.session_state:
                 <p class="welcome-sub">El administrador aún no cargó el corte operativo del día.</p>
             </div>
             """, unsafe_allow_html=True)
-            if st.button("🚪 Cerrar Sesión", use_container_width=True):
+            if st.button("🚪 Cerrar sesión", use_container_width=True):
                 logout()
         st.markdown(FOOTER, unsafe_allow_html=True)
         st.stop()
@@ -315,12 +236,12 @@ if "df" not in st.session_state:
                 <div class="welcome-wrap">
                     <div class="welcome-icon">🚚</div>
                     <p class="welcome-title">LogiTrack Universal</p>
-                    <p class="welcome-sub">Módulo de Auditoría y Control de Gestión</p>
+                    <p class="welcome-sub">Auditoría y Control de Gestión</p>
                 </div>
                 """, unsafe_allow_html=True)
 
-                archivo = st.file_uploader("Subí tu corte operativo de Lighdata o Flex", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
-                st.caption("Soporte nativo para cortes operativos: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
+                archivo = st.file_uploader("Subí el corte operativo", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
+                st.caption("Formatos soportados: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
         if archivo is not None:
             es_csv = archivo.name.lower().endswith(".csv")
@@ -393,17 +314,12 @@ if fecha_col and estado_col and estado_col in df.columns:
 col_h, col_btn, col_out = st.columns([5, 1.1, 0.9])
 with col_h:
     badge_name = filename if len(filename) <= 22 else filename[:22] + "…"
-    rol_badge  = "👑 Admin" if _ROL == "admin" else ("👁️ Demo" if _ROL == "demo" else "👤 Coordinadora")
-    st.markdown(f"""
-    <div class="dash-header">
-        <span style="font-size:1.5rem">📊</span>
-        <div>
-            <p class="dash-brand">LogiTrack - Panel Corporativo</p>
-            <p class="dash-meta">{total_orders:,} unidades auditadas · {rol_badge} {_USUARIO}</p>
-        </div>
-        <span class="file-badge">📂 {badge_name}</span>
-    </div>
-    """, unsafe_allow_html=True)
+    rol_badge  = "Admin" if _ROL == "admin" else ("Demo" if _ROL == "demo" else "Coordinadora")
+    st.markdown(
+        header_html("📊", "LogiTrack — Panel Corporativo",
+                    f"{total_orders:,} unidades · {rol_badge} {_USUARIO}", badge_name),
+        unsafe_allow_html=True,
+    )
 with col_btn:
     st.markdown("<br>", unsafe_allow_html=True)
     if es_admin() and st.button("🔄 Nuevo Corte", use_container_width=True):
@@ -416,38 +332,22 @@ with col_out:
     if st.button("🚪 Salir", use_container_width=True):
         logout()
 
-# ─ Banner demo ───────────────────────────────────────────────────────────────
 if _ROL == "demo":
-    st.info("👁️ **Modo demo** — Estás viendo datos ficticios de ejemplo. No podés subir archivos ni registrar incidencias.", icon=None)
+    st.markdown('<div class="alert-box info">👁️ <b>Modo demo</b> — Datos ficticios de ejemplo. No podés subir archivos ni registrar incidencias.</div>', unsafe_allow_html=True)
 
 # ─ KPIs ──────────────────────────────────────────────────────────────────────
-st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento (KPIs)</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento</p>', unsafe_allow_html=True)
 k1, k2, k3, k4 = st.columns(4)
 with k1:
-    st.markdown(f"""
-    <div class="kpi-card" style="border-color:{C_PRIMARY}">
-        <div class="kpi-num" style="color:{C_PRIMARY}">{total_orders:,} <span style="font-size:1.2rem">un.</span></div>
-        <div class="kpi-lbl">ORDER FILL RATE (OFR)</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(kpi_card("Envíos en el corte", f"{total_orders:,}"), unsafe_allow_html=True)
 with k2:
-    st.markdown(f"""
-    <div class="kpi-card" style="border-color:{C_GREEN}">
-        <div class="kpi-num" style="color:{C_GREEN}">{otd_pct}</div>
-        <div class="kpi-lbl">% OTD — ENTREGAS EFECTIVAS</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(kpi_card("OTD — Entregas efectivas", otd_pct), unsafe_allow_html=True)
 with k3:
-    st.markdown(f"""
-    <div class="kpi-card" style="border-color:{C_ACCENT}">
-        <div class="kpi-num" style="color:{C_ACCENT}">{inc_pct}</div>
-        <div class="kpi-lbl">TASA DE INCIDENCIA</div>
-    </div>""", unsafe_allow_html=True)
+    st.markdown(kpi_card("Tasa de incidencia", inc_pct), unsafe_allow_html=True)
 with k4:
-    _color_crit = "#C0392B" if pendientes_criticos > 0 else C_MUTED
-    st.markdown(f"""
-    <div class="kpi-card" style="border-color:{_color_crit}">
-        <div class="kpi-num" style="color:{_color_crit}">{pendientes_criticos}</div>
-        <div class="kpi-lbl">PENDIENTES CRÍTICOS +48HS</div>
-    </div>""", unsafe_allow_html=True)
+    _delta_crit = f"⚠ {pendientes_criticos} críticos" if pendientes_criticos > 0 else ""
+    _dir_crit   = "down" if pendientes_criticos > 0 else ""
+    st.markdown(kpi_card("Pendientes +48 hs", pendientes_criticos, _delta_crit, _dir_crit), unsafe_allow_html=True)
 
 st.divider()
 
@@ -473,38 +373,32 @@ if not df_alertas.empty and estado_col and estado_col in df.columns:
         .reset_index(drop=True)
     )
 
-    st.markdown("""
-    <div style="background:#C0392B; color:white; padding:0.75rem 1.2rem;
-        border-radius:10px 10px 0 0; font-weight:800; font-size:1.05rem; margin-top:0.5rem;">
-        ⚠️ Pendientes en Riesgo
-    </div>
-    """, unsafe_allow_html=True)
-
+    st.markdown(
+        '<div class="alert-box critical" style="border-radius:8px 8px 0 0; margin-bottom:0;">'
+        '<b>⚠ Envíos en riesgo</b></div>',
+        unsafe_allow_html=True,
+    )
     st.dataframe(
         df_tabla_riesgo.style.set_properties(**{
-            "background-color": "#FFEBEE",
-            "color": "#C0392B",
-            "font-weight": "600",
+            "background-color": "#FCEBEB",
+            "color": "#A32D2D",
+            "font-weight": "500",
         }),
-        use_container_width=True, hide_index=True
+        use_container_width=True, hide_index=True,
     )
     st.markdown("<br>", unsafe_allow_html=True)
 
 # ─ 1. ALERTAS CRÍTICAS ───────────────────────────────────────────────────────
-st.markdown('<p class="section-lbl">🚨 Alertas Críticas del Corte</p>', unsafe_allow_html=True)
+st.markdown('<p class="section-lbl">Alertas del corte</p>', unsafe_allow_html=True)
 a1, a2, a3, a4 = st.columns(4)
-for col_a, lbl, val, color in [
-    (a1, "⏳ Pendientes", total_pendientes, "#FF6B6B"),
-    (a2, "❌ Rechazados", total_rechazados, "#C0392B"),
-    (a3, "🚚 En Viaje",   total_en_viaje,   "#F39C12"),
-    (a4, "📌 Con Motivo", total_motivo,     "#E67E22"),
+for col_a, lbl, val, level in [
+    (a1, "Pendientes",  total_pendientes, "warning"),
+    (a2, "Rechazados",  total_rechazados, "critical"),
+    (a3, "En viaje",    total_en_viaje,   "warning"),
+    (a4, "Con motivo",  total_motivo,     "warning"),
 ]:
     with col_a:
-        st.markdown(f"""
-        <div class="kpi-card" style="border-color:{color}">
-            <div class="kpi-num" style="color:{color}">{val}</div>
-            <div class="kpi-lbl">{lbl}</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(kpi_card(lbl, val), unsafe_allow_html=True)
 
 if not (estado_col and estado_col in df.columns):
     st.info("ℹ️ No se detectó columna de Estado — las alertas críticas no están disponibles.")
@@ -613,7 +507,7 @@ if empresa_col and empresa_col in df.columns:
         fig_cli = px.bar(
             clientes_aff.head(15), x="Órdenes con Alerta", y=empresa_col,
             orientation="h", color="Órdenes con Alerta",
-            color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+            color_continuous_scale=["#EBF3FC", DS.CRITICAL],
             template="plotly_white", text="Órdenes con Alerta"
         )
         fig_cli.update_layout(
@@ -637,7 +531,7 @@ if zona_col and zona_col in df.columns:
         zonas_hot[zona_col] = zonas_hot[zona_col].fillna("Sin Datos").astype(str)
         fig_zona = px.bar(
             zonas_hot.head(15), x=zona_col, y="Problemas",
-            color="Problemas", color_continuous_scale=["#FFF3C4", "#FF6B6B"],
+            color="Problemas", color_continuous_scale=["#EBF3FC", DS.CRITICAL],
             template="plotly_white", text="Problemas"
         )
         fig_zona.update_layout(showlegend=False, coloraxis_showscale=False, height=320, margin=dict(t=10, b=50, l=10, r=10))

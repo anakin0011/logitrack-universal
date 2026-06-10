@@ -8,6 +8,8 @@ sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, es_admin, es_demo, calcular_turno
 from utils.db import actualizar_estado
 from utils.turnos import turno_siguiente_id, incidencias_de, heredar_pendientes
+from utils.styles import inject_css, badge, header_html, kpi_card, prio_level
+import utils.styles as DS
 
 st.set_page_config(
     page_title="Handoff · LogiTrack",
@@ -16,27 +18,14 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-C_PRIMARY   = "#FF8C69"
-C_SECONDARY = "#FFF3C4"
-C_ACCENT    = "#FF6B6B"
-C_TEXT      = "#2D2D2D"
-C_MUTED     = "#9E9E9E"
-C_GREEN     = "#52B788"
-
 ESTADOS = {
-    "pendiente":  {"label": "🔴 Pendiente",   "color": "#C0392B", "bg": "#FFEBEE"},
-    "en_gestion": {"label": "🟠 En gestión",  "color": "#E65100", "bg": "#FFF3E0"},
-    "resuelto":   {"label": "🟢 Resuelto",    "color": "#2E7D32", "bg": "#E8F5E9"},
-    "cancelado":  {"label": "⚫ Cancelado",   "color": "#757575", "bg": "#F5F5F5"},
+    "pendiente":  {"label": "Pendiente",  "color": DS.WARNING,  "bg": DS.WARNING_BG},
+    "en_gestion": {"label": "En gestión", "color": DS.WARNING,  "bg": DS.WARNING_BG},
+    "resuelto":   {"label": "Resuelto",   "color": DS.SUCCESS,  "bg": DS.SUCCESS_BG},
+    "cancelado":  {"label": "Cancelado",  "color": DS.MUTED,    "bg": DS.NEUTRAL_BG},
 }
-ESTADO_OPTS    = list(ESTADOS.keys())
+ESTADO_OPTS     = list(ESTADOS.keys())
 ESTADOS_ACTIVOS = {"pendiente", "en_gestion"}
-
-PRIO_COLORES = {
-    "Alta":  ("#C0392B", "#FFEBEE"),
-    "Media": ("#E65100", "#FFF3E0"),
-    "Baja":  ("#2E7D32", "#E8F5E9"),
-}
 
 login_requerido()
 
@@ -65,12 +54,11 @@ def _render_incidencias(df: pd.DataFrame, prefix: str):
     if df.empty:
         return
 
-    # Cabecera
     h_cols = st.columns([1.4, 1.9, 0.8, 1.6, 0.75, 1.5])
     for col, lbl in zip(h_cols, ["Tracking", "Empresa / Cadete", "Zona", "Tipo", "Prioridad", "Estado"]):
         col.markdown(
-            f"<span style='font-size:0.7rem; font-weight:700; text-transform:uppercase; "
-            f"color:{C_MUTED};'>{lbl}</span>",
+            f"<span style='font-size:0.7rem; font-weight:600; text-transform:uppercase; "
+            f"color:{DS.MUTED};'>{lbl}</span>",
             unsafe_allow_html=True,
         )
 
@@ -85,35 +73,31 @@ def _render_incidencias(df: pd.DataFrame, prefix: str):
         if estado_actual not in ESTADOS:
             estado_actual = "pendiente"
 
-        est   = ESTADOS[estado_actual]
-        p_txt, p_bg = PRIO_COLORES.get(prioridad, (C_MUTED, "#F5F5F5"))
+        est = ESTADOS[estado_actual]
 
         c_tr, c_emp, c_zon, c_tip, c_pri, c_sel = st.columns([1.4, 1.9, 0.8, 1.6, 0.75, 1.5])
 
         c_tr.markdown(
-            f'<div style="border-left:4px solid {est["color"]}; background:{est["bg"]}; '
-            f'border-radius:0 6px 6px 0; padding:0.35rem 0.55rem;">'
-            f'<b style="font-size:0.87rem;">{tracking}</b></div>',
+            f'<div style="border-left:3px solid {est["color"]}; background:{est["bg"]}; '
+            f'border-radius:0 6px 6px 0; padding:0.32rem 0.5rem;">'
+            f'<span class="tracking-id">{tracking}</span></div>',
             unsafe_allow_html=True,
         )
         c_emp.markdown(
-            f'<div style="padding:0.35rem 0; font-size:0.84rem; color:{C_TEXT};">'
+            f'<div style="padding:0.32rem 0; font-size:0.83rem; color:{DS.TEXT};">'
             f'{empresa} / {cadete}</div>',
             unsafe_allow_html=True,
         )
         c_zon.markdown(
-            f'<div style="padding:0.35rem 0; font-size:0.84rem; color:{C_TEXT};">{zona}</div>',
+            f'<div style="padding:0.32rem 0; font-size:0.83rem; color:{DS.TEXT};">{zona}</div>',
             unsafe_allow_html=True,
         )
         c_tip.markdown(
-            f'<div style="padding:0.35rem 0; font-size:0.82rem; color:{C_TEXT};">{tipo}</div>',
+            f'<div style="padding:0.32rem 0; font-size:0.81rem; color:{DS.TEXT};">{tipo}</div>',
             unsafe_allow_html=True,
         )
         c_pri.markdown(
-            f'<div style="padding:0.35rem 0;">'
-            f'<span style="background:{p_bg}; color:{p_txt}; border-radius:4px; '
-            f'padding:0.12rem 0.38rem; font-size:0.7rem; font-weight:700;">{prioridad}</span>'
-            f'</div>',
+            f'<div style="padding:0.32rem 0;">{badge(prioridad, prio_level(prioridad))}</div>',
             unsafe_allow_html=True,
         )
 
@@ -138,57 +122,17 @@ def _render_incidencias(df: pd.DataFrame, prefix: str):
         )
 
 
-# ─ CSS ────────────────────────────────────────────────────────────────────────
-st.markdown(f"""
-<style>
-[data-testid="collapsedControl"] {{ display: none !important; }}
-.stApp {{ background: #FFFFFF; }}
-.block-container {{ padding-top: 1.5rem !important; max-width: 1100px; }}
-.page-header {{
-    background: {C_SECONDARY}; border-radius: 12px;
-    padding: 0.75rem 1.2rem; margin-bottom: 1rem;
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-}}
-.page-brand {{ font-size: 1.2rem; font-weight: 800; color: {C_TEXT}; margin: 0; }}
-.page-meta  {{ font-size: 0.78rem; color: {C_MUTED}; margin: 0; }}
-.section-lbl {{
-    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; color: {C_MUTED}; margin: 1.2rem 0 0.4rem;
-}}
-.kpi-card {{
-    background: white; border-radius: 12px; padding: 1.2rem 1rem;
-    border-top: 4px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center;
-}}
-.kpi-num {{ font-size: 2.2rem; font-weight: 800; line-height: 1; }}
-.kpi-lbl {{ font-size: 0.65rem; font-weight: 700; letter-spacing: 0.08em;
-            text-transform: uppercase; color: {C_MUTED}; margin-top: 0.35rem; }}
-.resumen-box {{
-    background: {C_SECONDARY}; border-radius: 12px;
-    padding: 1.1rem 1.4rem; margin: 0.8rem 0;
-    border-left: 4px solid {C_PRIMARY};
-    font-size: 0.92rem; color: {C_TEXT}; line-height: 1.7;
-}}
-.app-footer {{
-    margin-top: 3rem; padding-top: 1.2rem;
-    border-top: 2px solid {C_SECONDARY};
-    text-align: center; color: {C_MUTED}; font-size: 0.82rem;
-}}
-</style>
-""", unsafe_allow_html=True)
+inject_css()
 
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    rol_badge = "👑 Admin" if es_admin() else ("👁️ Demo" if es_demo() else "👤 Coordinadora")
-    st.markdown(f"""
-    <div class="page-header">
-        <span style="font-size:1.5rem">🔄</span>
-        <div>
-            <p class="page-brand">Handoff de Turno</p>
-            <p class="page-meta">Turno actual: <b>{_turno.capitalize()}</b> · {_turno_id} · {rol_badge} {_nombre}</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    rol_badge = "Admin" if es_admin() else ("Demo" if es_demo() else "Coordinadora")
+    st.markdown(
+        header_html("🔄", "Handoff de Turno",
+                    f"Turno {_turno.capitalize()} · {_turno_id} · {rol_badge} {_nombre}"),
+        unsafe_allow_html=True,
+    )
 with col_salir:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 Salir", use_container_width=True):
@@ -218,18 +162,14 @@ total_heredar  = activos_hered + activos_nuevas
 # ─ KPIs ───────────────────────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Resumen del turno</p>', unsafe_allow_html=True)
 k1, k2, k3, k4 = st.columns(4)
-for col_k, num, lbl, color in [
-    (k1, len(df_heredadas), "Heredadas del turno anterior",    C_ACCENT),
-    (k2, cerrados_hered,    "Heredadas cerradas este turno",   C_GREEN),
-    (k3, total_nuevas,      "Nuevas registradas este turno",   C_PRIMARY),
-    (k4, total_heredar,     "Pasan al turno siguiente",        "#C0392B" if total_heredar > 0 else C_MUTED),
+for col_k, num, lbl in [
+    (k1, len(df_heredadas), "Heredadas del turno anterior"),
+    (k2, cerrados_hered,    "Heredadas cerradas este turno"),
+    (k3, total_nuevas,      "Nuevas registradas este turno"),
+    (k4, total_heredar,     "Pasan al turno siguiente"),
 ]:
     with col_k:
-        st.markdown(f"""
-        <div class="kpi-card" style="border-color:{color}">
-            <div class="kpi-num" style="color:{color}">{num}</div>
-            <div class="kpi-lbl">{lbl}</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(kpi_card(lbl, num), unsafe_allow_html=True)
 
 st.divider()
 

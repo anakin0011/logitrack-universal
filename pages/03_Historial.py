@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, es_admin, es_demo
 from utils.db import leer_todo
+from utils.styles import inject_css, kpi_card, header_html
+import utils.styles as DS
 
 st.set_page_config(
     page_title="Historial · LogiTrack",
@@ -16,58 +18,19 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-C_PRIMARY   = "#FF8C69"
-C_SECONDARY = "#FFF3C4"
-C_TEXT      = "#2D2D2D"
-C_MUTED     = "#9E9E9E"
-C_GREEN     = "#52B788"
-
 login_requerido()
 _nombre = get_nombre()
 
-st.markdown(f"""
-<style>
-[data-testid="collapsedControl"] {{ display: none !important; }}
-.stApp {{ background: #FFFFFF; }}
-.block-container {{ padding-top: 1.5rem !important; max-width: 1100px; }}
-.page-header {{
-    background: {C_SECONDARY}; border-radius: 12px;
-    padding: 0.75rem 1.2rem; margin-bottom: 1rem;
-    display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap;
-}}
-.page-brand {{ font-size: 1.2rem; font-weight: 800; color: {C_TEXT}; margin: 0; }}
-.page-meta  {{ font-size: 0.78rem; color: {C_MUTED}; margin: 0; }}
-.section-lbl {{
-    font-size: 0.68rem; font-weight: 700; letter-spacing: 0.1em;
-    text-transform: uppercase; color: {C_MUTED}; margin: 1.2rem 0 0.4rem;
-}}
-.kpi-card {{
-    background: white; border-radius: 12px; padding: 1rem 0.8rem;
-    border-top: 4px solid; box-shadow: 0 2px 8px rgba(0,0,0,0.06); text-align: center;
-}}
-.kpi-num {{ font-size: 1.9rem; font-weight: 800; line-height: 1; }}
-.kpi-lbl {{ font-size: 0.62rem; font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: {C_MUTED}; margin-top: 0.3rem; }}
-.app-footer {{
-    margin-top: 3rem; padding-top: 1.2rem;
-    border-top: 2px solid {C_SECONDARY};
-    text-align: center; color: {C_MUTED}; font-size: 0.82rem;
-}}
-</style>
-""", unsafe_allow_html=True)
+inject_css()
 
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    rol_badge = "👑 Admin" if es_admin() else ("👁️ Demo" if es_demo() else "👤 Coordinadora")
-    st.markdown(f"""
-    <div class="page-header">
-        <span style="font-size:1.5rem">📁</span>
-        <div>
-            <p class="page-brand">Historial de Turnos</p>
-            <p class="page-meta">{rol_badge} {_nombre}</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    rol_badge = "Admin" if es_admin() else ("Demo" if es_demo() else "Coordinadora")
+    st.markdown(
+        header_html("📁", "Historial de Turnos", f"{rol_badge} {_nombre}"),
+        unsafe_allow_html=True,
+    )
 with col_salir:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 Salir", use_container_width=True):
@@ -133,19 +96,15 @@ total_res        = int((df["estado"] == "resuelto").sum())
 total_pend       = int((df["estado"] == "pendiente").sum())
 tasa_res         = f"{total_res / total_inc * 100:.0f}%" if total_inc > 0 else "—"
 
-for col_g, num, lbl, color in [
-    (g1, turnos_unicos, "Turnos en el período",  C_PRIMARY),
-    (g2, total_inc,     "Incidencias totales",   "#7B68EE"),
-    (g3, total_res,     "Resueltas",             C_GREEN),
-    (g4, total_pend,    "Pendientes activos",    "#C0392B" if total_pend > 0 else C_MUTED),
-    (g5, tasa_res,      "Tasa de resolución",    C_GREEN),
+for col_g, num, lbl in [
+    (g1, turnos_unicos, "Turnos en el período"),
+    (g2, total_inc,     "Incidencias totales"),
+    (g3, total_res,     "Resueltas"),
+    (g4, total_pend,    "Pendientes activos"),
+    (g5, tasa_res,      "Tasa de resolución"),
 ]:
     with col_g:
-        st.markdown(f"""
-        <div class="kpi-card" style="border-color:{color}">
-            <div class="kpi-num" style="color:{color}">{num}</div>
-            <div class="kpi-lbl">{lbl}</div>
-        </div>""", unsafe_allow_html=True)
+        st.markdown(kpi_card(lbl, num), unsafe_allow_html=True)
 
 st.divider()
 
@@ -184,9 +143,9 @@ COLS_RESUMEN = ["Fecha", "Turno", "Coordinadora", "Total", "Resueltas", "Heredad
 
 def _style_resumen(row):
     if row["Pendientes"] > 0:
-        return ["background-color:#FFF8E1; color:#E65100; font-weight:600;"] * len(row)
+        return [f"background-color:{DS.WARNING_BG}; color:{DS.WARNING}; font-weight:600;"] * len(row)
     if "Cerrado" in str(row.get("Estado turno", "")):
-        return ["background-color:#F1F8E9; color:#2E7D32;"] * len(row)
+        return [f"background-color:{DS.SUCCESS_BG}; color:{DS.SUCCESS};"] * len(row)
     return [""] * len(row)
 
 st.dataframe(
@@ -226,9 +185,9 @@ if turno_sel_id:
     df_det    = df_det[COLS_DET].rename(columns=str.capitalize).sort_values("Timestamp", ascending=False).reset_index(drop=True)
 
     ESTILOS_EST = {
-        "resuelto":    "background-color:#E8F5E9; color:#2E7D32; font-weight:600;",
-        "transferido": "background-color:#E3F2FD; color:#1565C0; font-weight:600;",
-        "pendiente":   "background-color:#FFEBEE; color:#C0392B; font-weight:700;",
+        "resuelto":    f"background-color:{DS.SUCCESS_BG};  color:{DS.SUCCESS};  font-weight:600;",
+        "transferido": f"background-color:#EBF3FC;           color:{DS.P};        font-weight:600;",
+        "pendiente":   f"background-color:{DS.WARNING_BG};  color:{DS.WARNING};  font-weight:600;",
     }
 
     def _style_det(row):

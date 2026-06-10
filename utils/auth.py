@@ -2,10 +2,9 @@ import hashlib
 from datetime import datetime, timedelta
 import streamlit as st
 
-C_PRIMARY   = "#FF8C69"
-C_SECONDARY = "#FFF3C4"
-C_TEXT      = "#2D2D2D"
-C_MUTED     = "#9E9E9E"
+C_PRIMARY = "#185FA5"
+C_TEXT    = "#1A1F2B"
+C_MUTED   = "#5F6672"
 
 
 def _hash(pw: str) -> str:
@@ -38,23 +37,57 @@ def login_requerido() -> bool:
 
 
 def _mostrar_login():
-    st.markdown(f"""
+    st.markdown("""
     <style>
-    [data-testid="collapsedControl"] {{ display: none !important; }}
-    [data-testid="stSidebarNav"] {{ display: none !important; }}
-    section[data-testid="stSidebar"] {{ display: none !important; }}
-    .stApp {{ background: #FFFFFF; }}
-    .block-container {{ padding-top: 4.5rem !important; max-width: 400px !important; margin: auto; }}
-    .login-card {{
-        background: {C_SECONDARY};
-        border-radius: 18px;
-        padding: 2.5rem 2rem 1.8rem;
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
+    *, *::before, *::after { font-family: 'Inter', sans-serif !important; }
+    [data-testid="collapsedControl"] { display: none !important; }
+    [data-testid="stSidebarNav"]     { display: none !important; }
+    section[data-testid="stSidebar"] { display: none !important; }
+    .stApp { background: #F4F5F7; }
+    .block-container {
+        padding-top: 4.5rem !important;
+        max-width: 400px !important;
+        margin: auto;
+    }
+    .login-card {
+        background: #FFFFFF;
+        border-radius: 14px;
+        padding: 2.4rem 2rem 1.8rem;
         text-align: center;
-        box-shadow: 0 4px 24px rgba(255,140,105,0.18);
-    }}
-    .login-icon  {{ font-size: 3.5rem; line-height: 1; margin-bottom: 0.5rem; }}
-    .login-title {{ font-size: 1.9rem; font-weight: 800; color: {C_TEXT}; margin: 0 0 0.25rem; }}
-    .login-sub   {{ font-size: 0.84rem; color: {C_MUTED}; margin: 0 0 1.8rem; }}
+        box-shadow: 0 2px 12px rgba(0,0,0,0.08);
+        border: 1px solid #E4E6EA;
+        margin-bottom: 1rem;
+    }
+    .login-icon  { font-size: 2.8rem; line-height: 1; margin-bottom: 0.55rem; }
+    .login-title { font-size: 1.6rem; font-weight: 700; color: #1A1F2B;
+                   margin: 0 0 0.2rem; letter-spacing: -0.02em; }
+    .login-sub   { font-size: 0.82rem; color: #5F6672; margin: 0; }
+    .demo-hint {
+        background: #EBF3FC;
+        border: 1px solid #185FA5;
+        border-radius: 8px;
+        padding: 0.65rem 0.9rem;
+        font-size: 0.8rem;
+        color: #185FA5;
+        margin-bottom: 0.75rem;
+        text-align: left;
+    }
+    .login-version {
+        text-align: center;
+        font-size: 0.72rem;
+        color: #5F6672;
+        margin-top: 0.75rem;
+    }
+    .stButton > button {
+        background: #185FA5 !important;
+        color: #FFFFFF !important;
+        border: none !important;
+        border-radius: 8px !important;
+        font-weight: 600 !important;
+        font-size: 0.9rem !important;
+    }
+    .stButton > button:hover { background: #0C447C !important; }
     </style>
     """, unsafe_allow_html=True)
 
@@ -66,10 +99,9 @@ def _mostrar_login():
     </div>
     """, unsafe_allow_html=True)
 
-    st.markdown(f"""
-    <div style="background:#E3F2FD; border-radius:10px; padding:0.75rem 1rem;
-        border-left:4px solid #1565C0; font-size:0.83rem; color:#1565C0; margin-bottom:0.5rem;">
-        <b>🔍 Acceso demo</b><br>
+    st.markdown("""
+    <div class="demo-hint">
+        <b>Acceso demo</b> &nbsp;·&nbsp;
         Usuario: <b>demo</b> &nbsp;·&nbsp; Contraseña: <b>demo123</b>
     </div>
     """, unsafe_allow_html=True)
@@ -78,6 +110,8 @@ def _mostrar_login():
         usuario  = st.text_input("Usuario", placeholder="ingresá tu usuario")
         password = st.text_input("Contraseña", type="password", placeholder="••••••••")
         ingresar = st.form_submit_button("Ingresar →", use_container_width=True)
+
+    st.markdown('<p class="login-version">LogiTrack Universal · v2.0 · prod</p>', unsafe_allow_html=True)
 
     if ingresar:
         if not usuario.strip() or not password.strip():

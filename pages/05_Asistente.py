@@ -6,6 +6,7 @@ from datetime import datetime
 
 sys.path.insert(0, str(pathlib.Path(__file__).parent.parent))
 from utils.auth import login_requerido, logout, get_nombre, es_demo
+from utils.styles import inject_css, header_html
 
 st.set_page_config(
     page_title="Asistente IA · LogiTrack",
@@ -14,50 +15,21 @@ st.set_page_config(
     initial_sidebar_state="collapsed",
 )
 
-C_PRIMARY   = "#FF8C69"
-C_SECONDARY = "#FFF3C4"
-C_TEXT      = "#2D2D2D"
-C_MUTED     = "#9E9E9E"
-
 login_requerido()
 _nombre = get_nombre()
 
-st.markdown(f"""
-<style>
-[data-testid="collapsedControl"] {{ display: none !important; }}
-.stApp {{ background: #FFFFFF; }}
-.block-container {{ padding-top: 1.5rem !important; max-width: 860px; }}
-.page-header {{
-    background: {C_SECONDARY}; border-radius: 12px;
-    padding: 0.75rem 1.2rem; margin-bottom: 1rem;
-    display: flex; align-items: center; gap: 0.75rem;
-}}
-.page-brand {{ font-size: 1.2rem; font-weight: 800; color: {C_TEXT}; margin: 0; }}
-.page-meta  {{ font-size: 0.78rem; color: {C_MUTED}; margin: 0; }}
-.app-footer {{
-    margin-top: 3rem; padding-top: 1.2rem;
-    border-top: 2px solid {C_SECONDARY};
-    text-align: center; color: {C_MUTED}; font-size: 0.82rem;
-}}
-@media (max-width: 768px) {{
-    .block-container {{ padding: 0.5rem 0.6rem 5rem !important; max-width: 100% !important; }}
-}}
-</style>
-""", unsafe_allow_html=True)
+inject_css()
+st.markdown(".block-container { max-width: 860px !important; }", unsafe_allow_html=True)
 
 # ─ Header ─────────────────────────────────────────────────────────────────────
 col_hdr, col_salir = st.columns([6, 1])
 with col_hdr:
-    demo_badge = " · 👁️ Demo" if es_demo() else ""
-    st.markdown(f"""
-    <div class="page-header">
-        <span style="font-size:1.5rem">🤖</span>
-        <div>
-            <p class="page-brand">Asistente Logístico IA</p>
-            <p class="page-meta">Análisis del corte operativo en lenguaje natural{demo_badge}</p>
-        </div>
-    </div>
-    """, unsafe_allow_html=True)
+    demo_meta = " · Demo" if es_demo() else ""
+    st.markdown(
+        header_html("🤖", "Asistente Logístico IA",
+                    f"Análisis del corte en lenguaje natural{demo_meta}"),
+        unsafe_allow_html=True,
+    )
 with col_salir:
     st.markdown("<br>", unsafe_allow_html=True)
     if st.button("🚪 Salir", use_container_width=True):
