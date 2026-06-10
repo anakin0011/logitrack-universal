@@ -26,9 +26,17 @@ GLOBAL_CSS = f"""
 {_FONTS}
 
 /* ── Base ─────────────────────────────────────────────────────────────────── */
-*, *::before, *::after {{
-    font-family: 'Inter', system-ui, sans-serif !important;
+/* Target content elements only — never override icon fonts */
+body, p, div, span, a, li, td, th, label, input, textarea, button, select,
+h1, h2, h3, h4, h5, h6, caption, blockquote {{
+    font-family: 'Inter', system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
+}}
+/* Restore Material Icons untouched */
+.material-icons, .material-icons-outlined,
+.material-icons-round, .material-icons-sharp,
+[class*="material-icon"], [class*="MaterialIcon"] {{
+    font-family: 'Material Icons', 'Material Icons Outlined' !important;
 }}
 .stApp {{ background: {BG}; }}
 [data-testid="collapsedControl"] {{ display: none !important; }}
