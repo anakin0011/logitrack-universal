@@ -282,15 +282,10 @@ if "df" not in st.session_state:
                     col = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
                     col_map[target] = col
                 _trk = next((c for c in df_cargado.columns if "tracking" in str(c).lower()), None)
-                _df_nuevos, _df_cambios = comparar_envios(df_cargado, col_map, _trk)
-                _ok, _n, _err = guardar_envios(df_cargado, col_map, _trk)
-                # DEBUG TEMPORAL — borrar una vez confirmado que funciona
-                st.write(f"🛠 DEBUG guardar_envios: {_n} filas intentadas · "
-                         f"{'✅ OK' if _ok else f'❌ Error: {_err}'}")
                 st.session_state.update({
                     "df": df_cargado, "filename": archivo.name,
                     "header_row": header_row, "col_map": col_map,
-                    "diff_nuevos": _df_nuevos, "diff_cambios": _df_cambios,
+                    "tracking_col": _trk,
                 })
                 welcome_slot.empty()
                 st.rerun()
@@ -356,7 +351,7 @@ if fecha_col and estado_col and estado_col in df.columns:
         pendientes_criticos = 0
 
 # ─ Header ────────────────────────────────────────────────────────────────────
-col_h, col_btn, col_out = st.columns([5, 1.1, 0.9])
+col_h, col_save, col_btn, col_out = st.columns([5, 1.8, 1.1, 0.9])
 with col_h:
     badge_name = filename if len(filename) <= 22 else filename[:22] + "…"
     rol_badge  = "Admin" if _ROL == "admin" else ("Demo" if _ROL == "demo" else "Coordinadora")
@@ -365,6 +360,18 @@ with col_h:
                     f"{total_orders:,} unidades · {rol_badge} {_USUARIO}", badge_name),
         unsafe_allow_html=True,
     )
+with col_save:
+    if es_admin():
+        st.markdown("<br>", unsafe_allow_html=True)
+        if st.button("💾 Guardar en Supabase", use_container_width=True):
+            _trk = st.session_state.get("tracking_col") or next(
+                (c for c in df.columns if "tracking" in str(c).lower()), None
+            )
+            _df_nuevos, _df_cambios = comparar_envios(df, col_map, _trk)
+            _ok, _n, _err = guardar_envios(df, col_map, _trk)
+            st.session_state["save_result"]  = (_ok, _n, _err)
+            st.session_state["diff_nuevos"]  = _df_nuevos
+            st.session_state["diff_cambios"] = _df_cambios
 with col_btn:
     st.markdown("<br>", unsafe_allow_html=True)
     if es_admin() and st.button("🔄 Nuevo Corte", use_container_width=True):
@@ -380,14 +387,21 @@ with col_out:
 if _ROL == "demo":
     st.markdown('<div class="alert-box info">👁️ <b>Modo demo</b> — Datos ficticios de ejemplo. No podés subir archivos ni registrar incidencias.</div>', unsafe_allow_html=True)
 
-# ─ DIFF DE CARGA (solo admin, aparece una sola vez tras subir el corte) ───────
+# ─ RESULTADO DE GUARDAR + DIFF (solo admin) ───────────────────────────────────
 if es_admin():
+    _save_result  = st.session_state.pop("save_result",  None)
     _diff_nuevos  = st.session_state.pop("diff_nuevos",  None)
     _diff_cambios = st.session_state.pop("diff_cambios", None)
+    if _save_result is not None:
+        _ok, _n, _err = _save_result
+        if _ok:
+            st.success(f"✅ {_n} envíos guardados en Supabase correctamente.")
+        else:
+            st.error(f"❌ Error al guardar en Supabase: {_err}")
     if _diff_nuevos is not None and not _diff_nuevos.empty:
         st.markdown(
-            f'<div class="alert-box info"><b>🆕 {len(_diff_nuevos)} envíos nuevos en este corte</b>'
-            f' — no existían en el corte anterior.</div>',
+            f'<div class="alert-box info"><b>🆕 {len(_diff_nuevos)} envíos nuevos</b>'
+            f' — no existían en Supabase.</div>',
             unsafe_allow_html=True,
         )
         st.dataframe(_diff_nuevos, use_container_width=True, hide_index=True)
