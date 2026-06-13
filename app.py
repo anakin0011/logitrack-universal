@@ -266,9 +266,15 @@ if "df" not in st.session_state:
                 archivo = st.file_uploader("Subí el corte operativo", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
                 st.caption("Formatos soportados: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
+        # DEBUG TEMPORAL — borrar una vez confirmado que funciona
+        st.write(f"🛠 DEBUG archivo: {'✅ archivo recibido → ' + archivo.name if archivo is not None else '⚠ archivo es None (no se subió nada aún)'}")
+
         if archivo is not None:
             es_csv = archivo.name.lower().endswith(".csv")
             df_cargado, header_row = detectar_df(archivo, es_csv)
+
+            # DEBUG TEMPORAL
+            st.write(f"🛠 DEBUG detectar_df: df_cargado={'None' if df_cargado is None else f'{len(df_cargado)} filas · columnas: {list(df_cargado.columns[:5])}'}")
 
             if df_cargado is not None and not df_cargado.empty:
                 col_map = {}
