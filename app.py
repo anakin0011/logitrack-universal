@@ -10,6 +10,7 @@ import pathlib
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 from utils.auth import login_requerido, logout, get_nombre, get_rol, es_admin, es_demo
 from utils.styles import inject_css, kpi_card, badge, header_html, prio_level
+from utils.db import guardar_envios, leer_envios, comparar_envios
 import utils.styles as DS
 
 st.set_page_config(
@@ -213,19 +214,34 @@ if "df" not in st.session_state:
         st.session_state["col_map"]    = _cm_demo
 
     elif _ROL not in ("admin",):
-        _, col_c, _ = st.columns([0.15, 3, 0.15])
-        with col_c:
-            st.markdown("""
-            <div class="welcome-wrap">
-                <div class="welcome-icon">⏳</div>
-                <p class="welcome-title">Aguardando corte</p>
-                <p class="welcome-sub">El administrador aún no cargó el corte operativo del día.</p>
-            </div>
-            """, unsafe_allow_html=True)
-            if st.button("🚪 Cerrar sesión", use_container_width=True):
-                logout()
-        st.markdown(FOOTER, unsafe_allow_html=True)
-        st.stop()
+        _df_sb = leer_envios()
+        if not _df_sb.empty:
+            st.session_state.update({
+                "df":         _df_sb,
+                "filename":   "corte (Supabase)",
+                "header_row": 0,
+                "col_map": {
+                    "Cadete":          "cadete",
+                    "Zona":            "zona",
+                    "Nombre Fantasia": "empresa",
+                    "Estado":          "estado",
+                },
+            })
+            st.rerun()
+        else:
+            _, col_c, _ = st.columns([0.15, 3, 0.15])
+            with col_c:
+                st.markdown("""
+                <div class="welcome-wrap">
+                    <div class="welcome-icon">⏳</div>
+                    <p class="welcome-title">Aguardando corte</p>
+                    <p class="welcome-sub">El administrador aún no cargó el corte operativo del día.</p>
+                </div>
+                """, unsafe_allow_html=True)
+                if st.button("🚪 Cerrar sesión", use_container_width=True):
+                    logout()
+            st.markdown(FOOTER, unsafe_allow_html=True)
+            st.stop()
 
     else:
         welcome_slot = st.empty()
@@ -252,8 +268,13 @@ if "df" not in st.session_state:
                 for target, info in COLUMN_TARGETS.items():
                     col = buscar_columna(df_cargado.columns.tolist(), target, info["keywords"])
                     col_map[target] = col
+                _trk = next((c for c in df_cargado.columns if "tracking" in str(c).lower()), None)
+                _df_nuevos, _df_cambios = comparar_envios(df_cargado, col_map, _trk)
+                guardar_envios(df_cargado, col_map, _trk)
                 st.session_state.update({
-                    "df": df_cargado, "filename": archivo.name, "header_row": header_row, "col_map": col_map
+                    "df": df_cargado, "filename": archivo.name,
+                    "header_row": header_row, "col_map": col_map,
+                    "diff_nuevos": _df_nuevos, "diff_cambios": _df_cambios,
                 })
                 welcome_slot.empty()
                 st.rerun()
@@ -342,6 +363,25 @@ with col_out:
 
 if _ROL == "demo":
     st.markdown('<div class="alert-box info">👁️ <b>Modo demo</b> — Datos ficticios de ejemplo. No podés subir archivos ni registrar incidencias.</div>', unsafe_allow_html=True)
+
+# ─ DIFF DE CARGA (solo admin, aparece una sola vez tras subir el corte) ───────
+if es_admin():
+    _diff_nuevos  = st.session_state.pop("diff_nuevos",  None)
+    _diff_cambios = st.session_state.pop("diff_cambios", None)
+    if _diff_nuevos is not None and not _diff_nuevos.empty:
+        st.markdown(
+            f'<div class="alert-box info"><b>🆕 {len(_diff_nuevos)} envíos nuevos en este corte</b>'
+            f' — no existían en el corte anterior.</div>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(_diff_nuevos, use_container_width=True, hide_index=True)
+    if _diff_cambios is not None and not _diff_cambios.empty:
+        st.markdown(
+            f'<div class="alert-box warning"><b>🔄 {len(_diff_cambios)} envíos cambiaron de estado</b>'
+            f' respecto al corte anterior.</div>',
+            unsafe_allow_html=True,
+        )
+        st.dataframe(_diff_cambios, use_container_width=True, hide_index=True)
 
 # ─ KPIs ──────────────────────────────────────────────────────────────────────
 st.markdown('<p class="section-lbl">Indicadores Clave de Rendimiento</p>', unsafe_allow_html=True)

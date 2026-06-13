@@ -139,3 +139,116 @@ def marcar_transferidos(turno_id: str) -> bool:
     except Exception as e:
         st.error(f"Supabase — error al marcar transferidos: {e}")
         return False
+
+
+# ─── TABLA ENVIOS (corte operativo del admin) ─────────────────────────────────
+
+TABLA_ENVIOS = "envios"
+
+
+def _filas_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> list:
+    estado_col  = col_map.get("Estado")
+    cadete_col  = col_map.get("Cadete")
+    zona_col    = col_map.get("Zona")
+    empresa_col = col_map.get("Nombre Fantasia")
+    ahora = datetime.now().isoformat()
+    filas = []
+    for _, row in df.iterrows():
+        t = str(row.get(tracking_col, "")).strip() if tracking_col else ""
+        if not t or t in ("nan", "None", ""):
+            continue
+        filas.append({
+            "tracking": t,
+            "cadete":   str(row.get(cadete_col,  "")).strip() if cadete_col  else "",
+            "zona":     str(row.get(zona_col,    "")).strip() if zona_col    else "",
+            "empresa":  str(row.get(empresa_col, "")).strip() if empresa_col else "",
+            "estado":   str(row.get(estado_col,  "")).strip() if estado_col  else "",
+            "corte_at": ahora,
+        })
+    return filas
+
+
+def guardar_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> bool:
+    """Upserta todos los envíos del corte en la tabla envios."""
+    filas = _filas_envios(df, col_map, tracking_col)
+    if not filas:
+        return False
+    try:
+        for i in range(0, len(filas), 500):
+            _client().table(TABLA_ENVIOS).upsert(
+                filas[i:i + 500], on_conflict="tracking"
+            ).execute()
+        return True
+    except Exception as e:
+        st.error(f"Supabase — error al guardar envíos: {e}")
+        return False
+
+
+def leer_envios() -> pd.DataFrame:
+    """Lee el corte guardado por el admin (para coordinadoras)."""
+    try:
+        data = _client().table(TABLA_ENVIOS).select("*").execute().data
+        if not data:
+            return pd.DataFrame()
+        return pd.DataFrame(data).fillna("")
+    except Exception:
+        return pd.DataFrame()
+
+
+def comparar_envios(df_nuevo: pd.DataFrame, col_map: dict, tracking_col: str) -> tuple:
+    """
+    Compara el Excel nuevo contra los envíos guardados en Supabase.
+    Retorna (df_nuevos, df_cambios).
+    """
+    estado_col  = col_map.get("Estado")
+    cadete_col  = col_map.get("Cadete")
+    zona_col    = col_map.get("Zona")
+    empresa_col = col_map.get("Nombre Fantasia")
+
+    cols_display = {k: v for k, v in {
+        "Tracking": tracking_col,
+        "Cadete":   cadete_col,
+        "Zona":     zona_col,
+        "Empresa":  empresa_col,
+        "Estado":   estado_col,
+    }.items() if v and v in df_nuevo.columns}
+
+    df_actual = leer_envios()
+
+    if df_actual.empty:
+        df_n = df_nuevo[[v for v in cols_display.values()]].rename(
+            columns={v: k for k, v in cols_display.items()}
+        ).fillna("")
+        return df_n, pd.DataFrame()
+
+    existentes = set(df_actual["tracking"].astype(str).str.strip())
+
+    # Nuevos trackings
+    if tracking_col and tracking_col in df_nuevo.columns:
+        mask_nuevo = ~df_nuevo[tracking_col].astype(str).str.strip().isin(existentes)
+        df_n = df_nuevo[mask_nuevo][[v for v in cols_display.values()]].rename(
+            columns={v: k for k, v in cols_display.items()}
+        ).fillna("").reset_index(drop=True)
+    else:
+        df_n = pd.DataFrame()
+
+    # Cambios de estado
+    cambios = []
+    if tracking_col and estado_col and tracking_col in df_nuevo.columns and estado_col in df_nuevo.columns:
+        mapa_estado = df_actual.set_index("tracking")["estado"].to_dict()
+        for _, row in df_nuevo.iterrows():
+            t = str(row.get(tracking_col, "")).strip()
+            if t not in mapa_estado:
+                continue
+            estado_viejo = str(mapa_estado[t]).strip()
+            estado_nuevo = str(row.get(estado_col, "")).strip()
+            if estado_viejo.lower() != estado_nuevo.lower():
+                cambios.append({
+                    "Tracking":         t,
+                    "Estado anterior":  estado_viejo,
+                    "Estado nuevo":     estado_nuevo,
+                    "Cadete": str(row.get(cadete_col, "")).strip() if cadete_col else "",
+                    "Zona":   str(row.get(zona_col,   "")).strip() if zona_col   else "",
+                })
+
+    return df_n, pd.DataFrame(cambios)
