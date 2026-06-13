@@ -202,14 +202,16 @@ def inject_css() -> None:
     st.markdown(GLOBAL_CSS, unsafe_allow_html=True)
 
 
-def kpi_card(label: str, value, delta: str = "", delta_dir: str = "") -> str:
+def kpi_card(label: str, value, delta: str = "", delta_dir: str = "", accent: str = "") -> str:
     delta_html = (
         f'<div class="kpi-delta {delta_dir}">{delta}</div>' if delta else ""
     )
+    card_style  = f'border-left:4px solid {accent};' if accent else ''
+    value_style = f'color:{accent};' if accent else ''
     return (
-        f'<div class="kpi-card">'
+        f'<div class="kpi-card" style="{card_style}">'
         f'<div class="kpi-label">{label}</div>'
-        f'<div class="kpi-value">{value}</div>'
+        f'<div class="kpi-value" style="{value_style}">{value}</div>'
         f'{delta_html}'
         f'</div>'
     )

@@ -275,6 +275,7 @@ empresa_col = col_map.get("Nombre Fantasia")
 # ─ Pre-computar máscaras de estado ───────────────────────────────────────────
 total_orders = len(df)
 total_pendientes = total_rechazados = total_en_viaje = total_motivo = total_entregados = 0
+total_reprogramado = total_en_camino = total_nadie = 0
 df_alertas = pd.DataFrame()
 
 if estado_col and estado_col in df.columns:
@@ -285,12 +286,19 @@ if estado_col and estado_col in df.columns:
     mask_motivo    = s.str.contains("motivo",                       na=False, regex=False)
     mask_entr      = s.str.contains("entregado|entrega",            na=False)
 
-    total_pendientes = int(mask_pend_puro.sum())
-    total_en_viaje   = int(mask_en_viaje.sum())
-    total_rechazados = int(mask_rech.sum())
-    total_motivo     = int(mask_motivo.sum())
-    total_entregados = int(mask_entr.sum())
-    mask_alerta      = mask_pend_puro | mask_en_viaje | mask_rech | mask_motivo
+    mask_reprogramado = s.str.contains("reprogramado",  na=False, regex=False)
+    mask_en_camino    = s.str.contains("en camino",     na=False, regex=False)
+    mask_nadie        = s.str.contains("nadie",         na=False, regex=False)
+
+    total_pendientes   = int(mask_pend_puro.sum())
+    total_en_viaje     = int(mask_en_viaje.sum())
+    total_rechazados   = int(mask_rech.sum())
+    total_motivo       = int(mask_motivo.sum())
+    total_entregados   = int(mask_entr.sum())
+    total_reprogramado = int(mask_reprogramado.sum())
+    total_en_camino    = int(mask_en_camino.sum())
+    total_nadie        = int(mask_nadie.sum())
+    mask_alerta        = mask_pend_puro | mask_en_viaje | mask_rech | mask_motivo
     df_alertas       = df[mask_alerta].copy()
 
 total_anomalias = total_pendientes + total_en_viaje + total_rechazados + total_motivo
@@ -404,6 +412,17 @@ if not (estado_col and estado_col in df.columns):
     st.info("ℹ️ No se detectó columna de Estado — las alertas críticas no están disponibles.")
 elif total_anomalias == 0:
     st.success("✅ Sin anomalías detectadas en este corte.")
+
+# ─ ESTADOS DE SEGUIMIENTO ─────────────────────────────────────────────────────
+if estado_col and estado_col in df.columns:
+    st.markdown('<p class="section-lbl">Estados de Seguimiento</p>', unsafe_allow_html=True)
+    e1, e2, e3 = st.columns(3)
+    with e1:
+        st.markdown(kpi_card("En camino", total_en_camino, accent="#2E86C1"), unsafe_allow_html=True)
+    with e2:
+        st.markdown(kpi_card("Reprogramado", total_reprogramado, accent="#E67E22"), unsafe_allow_html=True)
+    with e3:
+        st.markdown(kpi_card("Nadie en domicilio", total_nadie, accent="#E74C3C"), unsafe_allow_html=True)
 
 st.divider()
 
