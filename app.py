@@ -214,7 +214,14 @@ if "df" not in st.session_state:
         st.session_state["col_map"]    = _cm_demo
 
     elif _ROL not in ("admin",):
-        _df_sb = leer_envios()
+        # DEBUG TEMPORAL — borrar una vez confirmado que funciona
+        try:
+            _df_sb = leer_envios()
+            st.write(f"🛠 DEBUG leer_envios: {len(_df_sb)} filas devueltas · "
+                     f"columnas: {list(_df_sb.columns) if not _df_sb.empty else '—'}")
+        except Exception as _e:
+            _df_sb = pd.DataFrame()
+            st.write(f"🛠 DEBUG leer_envios: ❌ Excepción — {_e}")
         if not _df_sb.empty:
             st.session_state.update({
                 "df":         _df_sb,
