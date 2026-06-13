@@ -175,15 +175,24 @@ def guardar_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> tuple:
     """
     filas = _filas_envios(df, col_map, tracking_col)
     n = len(filas)
+    # DEBUG TEMPORAL — borrar una vez confirmado que funciona
+    st.write(f"🛠 DEBUG guardar_envios: {len(df)} filas en el Excel · "
+             f"{n} filas válidas con tracking · tracking_col={tracking_col!r}")
     if not filas:
+        st.write("🛠 DEBUG guardar_envios: ⚠ 0 filas válidas — no se envió nada a Supabase")
         return False, 0, None
     try:
         for i in range(0, n, 500):
-            _client().table(TABLA_ENVIOS).upsert(
+            resp = _client().table(TABLA_ENVIOS).upsert(
                 filas[i:i + 500], on_conflict="tracking"
             ).execute()
+            # DEBUG TEMPORAL
+            st.write(f"🛠 DEBUG guardar_envios: lote {i//500 + 1} · "
+                     f"respuesta Supabase → data={resp.data[:2] if resp.data else '[]'} "
+                     f"(mostrando máx 2 filas)")
         return True, n, None
     except Exception as e:
+        st.write(f"🛠 DEBUG guardar_envios: ❌ Excepción — {e}")
         return False, n, str(e)
 
 
