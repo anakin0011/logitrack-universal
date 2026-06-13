@@ -367,6 +367,12 @@ with col_btn:
         st.rerun()
 with col_out:
     st.markdown("<br>", unsafe_allow_html=True)
+    if not es_admin() and not es_demo():
+        if st.button("🔄 Actualizar datos", use_container_width=True):
+            auth_data = st.session_state.get("auth")
+            st.session_state.clear()
+            st.session_state["auth"] = auth_data
+            st.rerun()
     if st.button("🚪 Salir", use_container_width=True):
         logout()
 
