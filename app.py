@@ -270,7 +270,10 @@ if "df" not in st.session_state:
                     col_map[target] = col
                 _trk = next((c for c in df_cargado.columns if "tracking" in str(c).lower()), None)
                 _df_nuevos, _df_cambios = comparar_envios(df_cargado, col_map, _trk)
-                guardar_envios(df_cargado, col_map, _trk)
+                _ok, _n, _err = guardar_envios(df_cargado, col_map, _trk)
+                # DEBUG TEMPORAL — borrar una vez confirmado que funciona
+                st.write(f"🛠 DEBUG guardar_envios: {_n} filas intentadas · "
+                         f"{'✅ OK' if _ok else f'❌ Error: {_err}'}")
                 st.session_state.update({
                     "df": df_cargado, "filename": archivo.name,
                     "header_row": header_row, "col_map": col_map,

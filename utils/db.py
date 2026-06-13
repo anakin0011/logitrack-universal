@@ -168,20 +168,23 @@ def _filas_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> list:
     return filas
 
 
-def guardar_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> bool:
-    """Upserta todos los envíos del corte en la tabla envios."""
+def guardar_envios(df: pd.DataFrame, col_map: dict, tracking_col: str) -> tuple:
+    """
+    Upserta todos los envíos del corte en la tabla envios.
+    Retorna (ok: bool, n_filas: int, error: str | None).
+    """
     filas = _filas_envios(df, col_map, tracking_col)
+    n = len(filas)
     if not filas:
-        return False
+        return False, 0, None
     try:
-        for i in range(0, len(filas), 500):
+        for i in range(0, n, 500):
             _client().table(TABLA_ENVIOS).upsert(
                 filas[i:i + 500], on_conflict="tracking"
             ).execute()
-        return True
+        return True, n, None
     except Exception as e:
-        st.error(f"Supabase — error al guardar envíos: {e}")
-        return False
+        return False, n, str(e)
 
 
 def leer_envios() -> pd.DataFrame:
