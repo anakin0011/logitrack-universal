@@ -115,7 +115,6 @@ def detectar_df(archivo, es_csv=False):
                 if "Cadete" in valores and "Estado" in valores and "Zona" in valores:
                     header_encontrado = i
                     break
-            st.write(f"🔍 Fila de encabezado detectada: {header_encontrado}")
             archivo.seek(0)
             df = pd.read_excel(archivo, header=header_encontrado, engine='openpyxl')
         except Exception:
@@ -214,14 +213,7 @@ if "df" not in st.session_state:
         st.session_state["col_map"]    = _cm_demo
 
     elif _ROL not in ("admin",):
-        # DEBUG TEMPORAL — borrar una vez confirmado que funciona
-        try:
-            _df_sb = leer_envios()
-            st.write(f"🛠 DEBUG leer_envios: {len(_df_sb)} filas devueltas · "
-                     f"columnas: {list(_df_sb.columns) if not _df_sb.empty else '—'}")
-        except Exception as _e:
-            _df_sb = pd.DataFrame()
-            st.write(f"🛠 DEBUG leer_envios: ❌ Excepción — {_e}")
+        _df_sb = leer_envios()
         if not _df_sb.empty:
             st.session_state.update({
                 "df":         _df_sb,
@@ -266,15 +258,9 @@ if "df" not in st.session_state:
                 archivo = st.file_uploader("Subí el corte operativo", type=["xlsx", "xls", "csv"], label_visibility="collapsed")
                 st.caption("Formatos soportados: Excel Clásico (.xls) · Excel Moderno (.xlsx) · CSV")
 
-        # DEBUG TEMPORAL — borrar una vez confirmado que funciona
-        st.write(f"🛠 DEBUG archivo: {'✅ archivo recibido → ' + archivo.name if archivo is not None else '⚠ archivo es None (no se subió nada aún)'}")
-
         if archivo is not None:
             es_csv = archivo.name.lower().endswith(".csv")
             df_cargado, header_row = detectar_df(archivo, es_csv)
-
-            # DEBUG TEMPORAL
-            st.write(f"🛠 DEBUG detectar_df: df_cargado={'None' if df_cargado is None else f'{len(df_cargado)} filas · columnas: {list(df_cargado.columns[:5])}'}")
 
             if df_cargado is not None and not df_cargado.empty:
                 col_map = {}
